@@ -5,7 +5,7 @@ from typing import Any
 import httpx
 
 from mars.client.base import BaseClient
-from mars.config.client import ClientConfig
+from mars.config.client import ClientConfig, SemanticScholarSettings
 from mars.models.s2 import (
     Author,
     AuthorDetail,
@@ -98,6 +98,21 @@ class SemanticScholarClient(BaseClient):
             self._rate_limiter.min_interval = max(
                 self._rate_limiter.min_interval, UNAUTHENTICATED_INTERVAL
             )
+
+    @classmethod
+    def from_env(
+        cls, settings: SemanticScholarSettings | None = None
+    ) -> "SemanticScholarClient":
+        """Build a client from SEMANTIC_SCHOLAR_API_KEY and .env settings."""
+        settings = settings or SemanticScholarSettings()
+        return cls(
+            ClientConfig(
+                base_url=settings.base_url,
+                api_key=settings.semantic_scholar_api_key,
+                request_timeout=settings.request_timeout,
+                min_request_interval=settings.min_request_interval,
+            )
+        )
 
     def auth_headers(self) -> dict[str, str]:
         """Add the x-api-key header when an API key is configured."""
