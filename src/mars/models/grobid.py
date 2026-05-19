@@ -1,5 +1,3 @@
-"""Domain models for a scholarly article parsed from GROBID TEI output."""
-
 from enum import Enum
 
 from pydantic import BaseModel, Field

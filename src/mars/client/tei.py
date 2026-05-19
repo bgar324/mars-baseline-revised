@@ -1,5 +1,3 @@
-"""TEI XML parser for GROBID-generated documents."""
-
 import string
 from collections.abc import Generator
 from typing import Any

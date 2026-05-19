@@ -1,5 +1,3 @@
-"""Async HTTP base for outbound provider clients."""
-
 import asyncio
 import time
 from abc import ABC, abstractmethod
@@ -36,13 +34,17 @@ class BaseClient(ABC):
         self._rate_limiter = RateLimiter(config.min_request_interval)
         self._session: httpx.AsyncClient | None = None
 
+    def auth_headers(self) -> dict[str, str]:
+        """Return provider-specific auth headers. Override as needed."""
+        return {}
+
     @property
     def session(self) -> httpx.AsyncClient:
         """Return the async session, creating it on first use."""
         if self._session is None:
             self._session = httpx.AsyncClient(
                 base_url=self.config.base_url,
-                headers={"User-Agent": self.config.user_agent},
+                headers={"User-Agent": self.config.user_agent, **self.auth_headers()},
                 timeout=self.config.request_timeout,
                 follow_redirects=True,
             )

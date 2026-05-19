@@ -1,5 +1,3 @@
-"""GROBID HTTP client: PDF bytes to a parsed Article."""
-
 from typing import Any
 
 from mars.client.base import BaseClient
@@ -7,7 +5,6 @@ from mars.client.tei import Parser
 from mars.models.grobid import Article
 from mars.schemas.grobid import Form, Response
 
-# GROBID-specific status codes mapped to readable causes.
 _ERROR_CODES = {
     203: "Content couldn't be extracted",
     400: "Wrong request, missing parameters, missing header",

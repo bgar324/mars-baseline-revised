@@ -1,5 +1,3 @@
-"""Shared base behavior for domain models."""
-
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any

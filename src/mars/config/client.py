@@ -1,5 +1,4 @@
-"""Configuration for outbound HTTP clients."""
-
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,3 +11,4 @@ class ClientConfig(BaseSettings):
     user_agent: str = "mars"
     request_timeout: float = 60.0
     min_request_interval: float = 0.0
+    api_key: SecretStr | None = None

@@ -1,5 +1,3 @@
-"""Supabase client wrapper used as an async context manager."""
-
 from typing import Any
 
 from supabase import AsyncClient, acreate_client
