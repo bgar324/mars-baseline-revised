@@ -45,9 +45,7 @@ class Parser:
         if not isinstance(body, Tag):
             raise ParserError("Missing body element in TEI document")
 
-        abstract: Section | None = self.section(
-            self.soup.abstract, title="Abstract"
-        )
+        abstract: Section | None = self.section(self.soup.abstract, title="Abstract")
 
         sections: list[Section] = []
         for div in body.find_all("div"):
@@ -122,9 +120,7 @@ class Parser:
 
         return citation
 
-    def title(
-        self, source_tag: Tag | None, attrs: dict[str, Any] | None = None
-    ) -> str:
+    def title(self, source_tag: Tag | None, attrs: dict[str, Any] | None = None) -> str:
         """Extract text from a title element, empty string if absent."""
         if attrs is None:
             attrs = {}
@@ -199,10 +195,7 @@ class Parser:
                 match unit:
                     case "page":
                         try:
-                            if (
-                                "from" in scope_tag.attrs
-                                and "to" in scope_tag.attrs
-                            ):
+                            if "from" in scope_tag.attrs and "to" in scope_tag.attrs:
                                 from_val = scope_tag.attrs["from"]
                                 to_val = scope_tag.attrs["to"]
                                 if isinstance(from_val, str) and isinstance(
@@ -245,9 +238,7 @@ class Parser:
                     if (surname_tag := persname.find("surname")) is not None:
                         person_name = PersonName(surname=surname_tag.text or "")
 
-                        if forename_tag := persname.find(
-                            "forename", {"type": "first"}
-                        ):
+                        if forename_tag := persname.find("forename", {"type": "first"}):
                             person_name.first_name = forename_tag.text
 
                         author_obj = Author(person_name=person_name)
@@ -259,9 +250,7 @@ class Parser:
                         for affiliation_tag in author.find_all("affiliation"):
                             affiliation_obj = Affiliation()
 
-                            for orgname_tag in affiliation_tag.find_all(
-                                "orgName"
-                            ):
+                            for orgname_tag in affiliation_tag.find_all("orgName"):
                                 org_type = orgname_tag.get("type")
                                 org_text = orgname_tag.text
 
@@ -281,9 +270,7 @@ class Parser:
 
         return authors
 
-    def section(
-        self, source_tag: Tag | None, title: str = ""
-    ) -> Section | None:
+    def section(self, source_tag: Tag | None, title: str = "") -> Section | None:
         """Parse a div element with a head into a Section."""
         if source_tag is not None:
             head = source_tag.find("head")
@@ -354,9 +341,7 @@ class Parser:
                         table.description = desc_tag.get_text()
 
                     for row in source_tag.find_all("row"):
-                        row_list = [
-                            cell.get_text() for cell in row.find_all("cell")
-                        ]
+                        row_list = [cell.get_text() for cell in row.find_all("cell")]
                         table.rows.append(row_list)
 
                     return table
@@ -376,9 +361,7 @@ class Parser:
             case _:
                 return Date(year=tokens[0], month=tokens[1], day=tokens[2])
 
-    def _text_and_refs(
-        self, source_tag: Tag
-    ) -> Generator[PageElement, None, None]:
+    def _text_and_refs(self, source_tag: Tag) -> Generator[PageElement, None, None]:
         """Yield text nodes and ref tags in document order."""
         for descendant in source_tag.descendants:
             descendant_type = type(descendant)

@@ -53,9 +53,7 @@ class Affiliation(BaseModel):
 
     def is_empty(self) -> bool:
         """Return whether no affiliation information is present."""
-        return all(
-            getattr(self, name) is None for name in type(self).model_fields
-        )
+        return all(getattr(self, name) is None for name in type(self).model_fields)
 
 
 class Author(BaseModel):

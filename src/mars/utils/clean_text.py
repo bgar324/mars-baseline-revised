@@ -89,9 +89,7 @@ def remove_repeated_text(text: str, threshold_ratio: float = 0.1) -> str:
     line_counts = Counter(lines)
     threshold = max(1, int(len(lines) * threshold_ratio))
     cleaned = [
-        line
-        for line in lines
-        if line_counts[line] <= threshold or line.strip() == ""
+        line for line in lines if line_counts[line] <= threshold or line.strip() == ""
     ]
     return "\n".join(cleaned)
 
