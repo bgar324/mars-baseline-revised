@@ -14,7 +14,7 @@ class ClientConfig(BaseSettings):
     api_key: SecretStr | None = None
 
 
-class SemanticScholarSettings(BaseSettings):
+class SemanticScholarConfig(BaseSettings):
     """Runtime configuration for the Semantic Scholar client."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

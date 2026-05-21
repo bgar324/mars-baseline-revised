@@ -5,7 +5,8 @@ from typing import Any
 import httpx
 
 from mars.client.base import BaseClient
-from mars.config.client import ClientConfig, SemanticScholarSettings
+from mars.config.client import ClientConfig
+from mars.config.settings import SemanticScholarSettings
 from mars.models.s2 import (
     Author,
     AuthorDetail,
@@ -108,7 +109,7 @@ class SemanticScholarClient(BaseClient):
         return cls(
             ClientConfig(
                 base_url=settings.base_url,
-                api_key=settings.semantic_scholar_api_key,
+                api_key=settings.api_key,
                 request_timeout=settings.request_timeout,
                 min_request_interval=settings.min_request_interval,
             )
