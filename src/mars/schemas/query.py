@@ -52,3 +52,14 @@ class HypotheticalQuestions(BaseModel):
         min_length=3,
         max_length=5,
     )
+
+
+class RetrievalAnchors(BaseModel):
+    """Query strings used to retrieve candidate papers."""
+
+    construct_queries: list[str] = Field(
+        description="One query per construct, joining the construct with "
+        "its expansions to widen recall"
+    )
+    hypothetical_queries: list[str]
+    claim_query: str | None = None

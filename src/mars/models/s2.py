@@ -42,6 +42,7 @@ class Paper(BaseModel):
     fields_of_study: list[str] = Field(default_factory=list)
     authors: list[Author] = Field(default_factory=list)
     external_ids: dict[str, str] = Field(default_factory=dict)
+    specter_v2: list[float] | None = None
 
 
 class CitationEdge(BaseModel):

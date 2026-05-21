@@ -35,6 +35,7 @@ PAPER_FIELDS = (
     "openAccessPdf",
     "fieldsOfStudy",
     "authors",
+    "embedding.specter_v2",
 )
 
 AUTHOR_FIELDS = (
@@ -200,11 +201,20 @@ class SemanticScholarClient(BaseClient):
     def _parse_paper(data: dict[str, Any]) -> Paper:
         ext = data.get("externalIds") or {}
         open_access = data.get("openAccessPdf") or {}
-        authors = [
-            Author(id=a.get("authorId"), name=a["name"])
-            for a in data.get("authors") or []
-            if a.get("name")
-        ]
+        authors: list[Author] = []
+        for a in data.get("authors") or []:
+            if isinstance(a, dict):
+                name = a.get("name")
+                if name:
+                    authors.append(Author(id=a.get("authorId"), name=name))
+            elif isinstance(a, str) and a:
+                authors.append(Author(id=None, name=a))
+        embedding = data.get("embedding") or {}
+        specter_v2 = (
+            embedding.get("vector")
+            if embedding.get("model") == "specter_v2"
+            else None
+        )
         return Paper(
             id=data.get("paperId") or "",
             title=data.get("title") or "",
@@ -224,6 +234,7 @@ class SemanticScholarClient(BaseClient):
             fields_of_study=data.get("fieldsOfStudy") or [],
             authors=authors,
             external_ids={k: str(v) for k, v in ext.items() if v is not None},
+            specter_v2=specter_v2,
         )
 
     @staticmethod
