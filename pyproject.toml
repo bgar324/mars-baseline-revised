@@ -7,11 +7,13 @@ requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "google-genai>=1.0.0",
+    "hdbscan>=0.8.36",
     "httpx>=0.28.1",
     "langextract>=1.4.0",
     "lxml>=6.1.1",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
+    "umap-learn>=0.5.5",
 ]
 
 [build-system]
@@ -24,6 +26,7 @@ packages = ["src/mars"]
 [dependency-groups]
 dev = [
     "ipykernel>=7.2.0",
+    "matplotlib>=3.8",
     "pytest>=9.0.3",
     "ruff>=0.15.13",
 ]
