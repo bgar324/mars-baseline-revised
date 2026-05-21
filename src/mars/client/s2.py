@@ -237,7 +237,9 @@ class SemanticScholarClient(BaseClient):
         s2_fos: list[FieldOfStudy] = []
         for f in data.get("s2FieldsOfStudy") or []:
             if isinstance(f, dict) and f.get("category"):
-                s2_fos.append(FieldOfStudy(category=f["category"], source=f.get("source")))
+                s2_fos.append(
+                    FieldOfStudy(category=f["category"], source=f.get("source"))
+                )
         return Paper(
             id=data.get("paperId") or "",
             title=data.get("title") or "",

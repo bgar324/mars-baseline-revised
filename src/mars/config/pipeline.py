@@ -77,8 +77,7 @@ class RetrievalConfig(BaseModel):
     snippets_per_anchor: int = Field(default=25, ge=1, le=1000)
     retrieval_budget: int = Field(default=300, ge=1)
     publication_types: str = (
-        "JournalArticle,Conference,Study,ClinicalTrial,"
-        "CaseReport,MetaAnalysis"
+        "JournalArticle,Conference,Study,ClinicalTrial,CaseReport,MetaAnalysis"
     )
 
 
