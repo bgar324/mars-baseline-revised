@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
-def build_thinking_config(cfg: GeminiSettings) -> types.ThinkingConfig:
+def build_thinking_config(cfg: GeminiSettings) -> types.ThinkingConfig | None:
+    if not cfg.thinking_level:
+        return None
     level = getattr(types.ThinkingLevel, cfg.thinking_level.upper())
     return types.ThinkingConfig(thinking_level=level)
 
@@ -62,14 +64,18 @@ class GoogleGeminiClient:
         cfg = config or self._default_config
         system_instruction, contents = prepare_contents(messages)
 
-        gen_config = types.GenerateContentConfig(
+        gen_config_kwargs: dict[str, Any] = dict(
             system_instruction=system_instruction,
             max_output_tokens=cfg.max_output_tokens,
             temperature=cfg.temperature,
             top_p=cfg.top_p,
             top_k=cfg.top_k,
-            thinking_config=build_thinking_config(cfg),
         )
+        thinking_config = build_thinking_config(cfg)
+        if thinking_config is not None:
+            gen_config_kwargs["thinking_config"] = thinking_config
+
+        gen_config = types.GenerateContentConfig(**gen_config_kwargs)
 
         response = await self._client.aio.models.generate_content(
             model=cfg.model,
@@ -119,16 +125,20 @@ class GoogleGeminiClient:
         cfg = config or self._default_config
         system_instruction, contents = prepare_contents(messages)
 
-        gen_config = types.GenerateContentConfig(
+        gen_config_kwargs: dict[str, Any] = dict(
             system_instruction=system_instruction,
             max_output_tokens=cfg.max_output_tokens,
             temperature=cfg.temperature,
             top_p=cfg.top_p,
             top_k=cfg.top_k,
-            thinking_config=build_thinking_config(cfg),
             response_mime_type="application/json",
             response_schema=schema,
         )
+        thinking_config = build_thinking_config(cfg)
+        if thinking_config is not None:
+            gen_config_kwargs["thinking_config"] = thinking_config
+
+        gen_config = types.GenerateContentConfig(**gen_config_kwargs)
 
         response = await self._client.aio.models.generate_content(
             model=cfg.model,

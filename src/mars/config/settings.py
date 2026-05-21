@@ -16,7 +16,7 @@ class GeminiSettings(BaseSettings):
     top_p: float = Field(default=0.95, ge=0.0, le=1.0)
     top_k: int = Field(default=40, ge=1, le=100)
     max_output_tokens: int = Field(default=2048, ge=100, le=8192)
-    thinking_level: str = "low"
+    thinking_level: str | None = None
 
 
 class LangExtractSettings(BaseSettings):
