@@ -1,6 +1,7 @@
 import asyncio
 
 from mars.client.s2 import SemanticScholarClient
+from mars.config.pipeline import RetrievalConfig
 from mars.models.s2 import Paper
 from mars.schemas.query import (
     ExtractedQuery,
@@ -10,10 +11,6 @@ from mars.schemas.query import (
     SemanticRole,
 )
 
-PAPERS_PER_ANCHOR = 25
-SNIPPETS_PER_ANCHOR = 25
-RETRIEVAL_BUDGET = 300
-
 
 def build_anchors(
     extracted: ExtractedQuery,
@@ -21,8 +18,7 @@ def build_anchors(
     questions: HypotheticalQuestions,
 ) -> RetrievalAnchors:
     construct_queries = [
-        f"{ec.construct} {' '.join(ec.expansions)}"
-        for ec in expansion.expansions
+        f"{ec.construct} {' '.join(ec.expansions)}" for ec in expansion.expansions
     ]
     claim_span = next(
         (s for s in extracted.spans if s.role == SemanticRole.CLAIM),
@@ -36,10 +32,14 @@ def build_anchors(
 
 
 async def retrieve_for_anchor(
-    client: SemanticScholarClient, anchor: str
+    client: SemanticScholarClient, anchor: str, config: RetrievalConfig
 ) -> list[Paper]:
-    papers_task = client.search(anchor, limit=PAPERS_PER_ANCHOR)
-    snippets_task = client.search_snippets(anchor, limit=SNIPPETS_PER_ANCHOR)
+    papers_task = client.search(
+        anchor,
+        limit=config.papers_per_anchor,
+        publicationTypes=config.publication_types or None,
+    )
+    snippets_task = client.search_snippets(anchor, limit=config.snippets_per_anchor)
     papers, snippets = await asyncio.gather(papers_task, snippets_task)
     return papers + [s.paper for s in snippets]
 
@@ -61,22 +61,26 @@ def deduplicate(papers: list[Paper]) -> list[Paper]:
 
 
 async def retrieve_candidates(
-    client: SemanticScholarClient, anchors: RetrievalAnchors
+    client: SemanticScholarClient,
+    anchors: RetrievalAnchors,
+    config: RetrievalConfig,
 ) -> list[Paper]:
     queries = [*anchors.construct_queries, *anchors.hypothetical_queries]
     if anchors.claim_query:
         queries.append(anchors.claim_query)
     results = await asyncio.gather(
-        *(retrieve_for_anchor(client, q) for q in queries)
+        *(retrieve_for_anchor(client, q, config) for q in queries)
     )
     flat = [p for sub in results for p in sub]
-    snippet_corpus_ids = {p.corpus_id for p in flat if not p.id and p.corpus_id is not None}
+    snippet_corpus_ids = {
+        p.corpus_id for p in flat if not p.id and p.corpus_id is not None
+    }
     if snippet_corpus_ids:
         hydrated = await client.batch_papers(
             [f"CorpusId:{cid}" for cid in snippet_corpus_ids]
         )
         flat = [p for p in flat if p.id] + hydrated
-    return deduplicate(flat)[:RETRIEVAL_BUDGET]
+    return deduplicate(flat)[: config.retrieval_budget]
 
 
 async def retrieve_literature(
@@ -84,7 +88,9 @@ async def retrieve_literature(
     expansion: QueryExpansion,
     questions: HypotheticalQuestions,
     client: SemanticScholarClient,
+    config: RetrievalConfig | None = None,
 ) -> list[Paper]:
     """Retrieve candidate papers from Query Expansion outputs."""
+    cfg = config or RetrievalConfig()
     anchors = build_anchors(extracted, expansion, questions)
-    return await retrieve_candidates(client, anchors)
+    return await retrieve_candidates(client, anchors, cfg)
