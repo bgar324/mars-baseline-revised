@@ -29,7 +29,7 @@ class LangExtractSettings(BaseSettings):
 
     api_key: SecretStr
     model_id: str = "gemini-2.5-flash-lite"
-    extraction_passes: int = Field(default=2, ge=1, le=10)
+    extraction_passes: int = Field(default=1, ge=1, le=10)
     max_workers: int = Field(default=10, ge=1, le=100)
     max_char_buffer: int = Field(default=1000, ge=100, le=5000)
 
