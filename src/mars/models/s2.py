@@ -21,6 +21,23 @@ class AuthorDetail(BaseModel):
     h_index: int | None = None
 
 
+class FieldOfStudy(BaseModel):
+    """A topical category assigned to a paper by Semantic Scholar or an external source."""
+
+    category: str
+    source: str | None = None
+
+
+class PublicationVenue(BaseModel):
+    """The journal, conference, or preprint server where a paper appeared."""
+
+    id: str | None = None
+    name: str | None = None
+    type: str | None = None
+    alternate_names: list[str] = Field(default_factory=list)
+    url: str | None = None
+
+
 class Paper(BaseModel):
     """Scholarly paper."""
 
@@ -28,7 +45,10 @@ class Paper(BaseModel):
     title: str
     corpus_id: int | None = None
     abstract: str | None = None
+    tldr: str | None = None
     venue: str | None = None
+    publication_venue: PublicationVenue | None = None
+    publication_types: list[str] = Field(default_factory=list)
     year: int | None = None
     publication_date: str | None = None
     url: str | None = None
@@ -40,6 +60,8 @@ class Paper(BaseModel):
     is_open_access: bool | None = None
     open_access_pdf_url: str | None = None
     fields_of_study: list[str] = Field(default_factory=list)
+    s2_fields_of_study: list[FieldOfStudy] = Field(default_factory=list)
+    text_availability: str | None = None
     authors: list[Author] = Field(default_factory=list)
     external_ids: dict[str, str] = Field(default_factory=dict)
     specter_v2: list[float] | None = None

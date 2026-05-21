@@ -11,7 +11,9 @@ from mars.models.s2 import (
     Author,
     AuthorDetail,
     CitationEdge,
+    FieldOfStudy,
     Paper,
+    PublicationVenue,
     Snippet,
     TextSpan,
 )
@@ -25,7 +27,10 @@ PAPER_FIELDS = (
     "url",
     "title",
     "abstract",
+    "tldr",
     "venue",
+    "publicationVenue",
+    "publicationTypes",
     "year",
     "publicationDate",
     "referenceCount",
@@ -34,6 +39,8 @@ PAPER_FIELDS = (
     "isOpenAccess",
     "openAccessPdf",
     "fieldsOfStudy",
+    "s2FieldsOfStudy",
+    "textAvailability",
     "authors",
     "embedding.specter_v2",
 )
@@ -211,16 +218,35 @@ class SemanticScholarClient(BaseClient):
                 authors.append(Author(id=None, name=a))
         embedding = data.get("embedding") or {}
         specter_v2 = (
-            embedding.get("vector")
-            if embedding.get("model") == "specter_v2"
+            embedding.get("vector") if embedding.get("model") == "specter_v2" else None
+        )
+        tldr_obj = data.get("tldr") or {}
+        tldr_text = tldr_obj.get("text") if isinstance(tldr_obj, dict) else None
+        pv = data.get("publicationVenue") or {}
+        publication_venue = (
+            PublicationVenue(
+                id=pv.get("id"),
+                name=pv.get("name"),
+                type=pv.get("type"),
+                alternate_names=pv.get("alternate_names") or [],
+                url=pv.get("url"),
+            )
+            if pv
             else None
         )
+        s2_fos: list[FieldOfStudy] = []
+        for f in data.get("s2FieldsOfStudy") or []:
+            if isinstance(f, dict) and f.get("category"):
+                s2_fos.append(FieldOfStudy(category=f["category"], source=f.get("source")))
         return Paper(
             id=data.get("paperId") or "",
             title=data.get("title") or "",
             corpus_id=data.get("corpusId"),
             abstract=data.get("abstract"),
+            tldr=tldr_text,
             venue=data.get("venue"),
+            publication_venue=publication_venue,
+            publication_types=data.get("publicationTypes") or [],
             year=data.get("year"),
             publication_date=data.get("publicationDate"),
             url=data.get("url"),
@@ -232,6 +258,8 @@ class SemanticScholarClient(BaseClient):
             is_open_access=data.get("isOpenAccess"),
             open_access_pdf_url=open_access.get("url"),
             fields_of_study=data.get("fieldsOfStudy") or [],
+            s2_fields_of_study=s2_fos,
+            text_availability=data.get("textAvailability"),
             authors=authors,
             external_ids={k: str(v) for k, v in ext.items() if v is not None},
             specter_v2=specter_v2,
