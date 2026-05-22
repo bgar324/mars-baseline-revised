@@ -1,4 +1,16 @@
+from __future__ import annotations
+
+from enum import Enum
+
 from pydantic import BaseModel, Field
+
+
+class PipelineConfig(BaseModel):
+    document_extraction: DocumentExtractionConfig = Field(
+        default_factory=lambda: DocumentExtractionConfig()
+    )
+    retrieval: RetrievalConfig = Field(default_factory=lambda: RetrievalConfig())
+    clustering: ClusterConfig = Field(default_factory=lambda: ClusterConfig())
 
 
 class SectionConfig(BaseModel):
@@ -72,12 +84,21 @@ class DocumentExtractionConfig(BaseModel):
     max_workers: int = Field(default=5, ge=1, le=20)
 
 
+class PublicationType(str, Enum):
+    JOURNAL_ARTICLE = "JournalArticle"
+    CONFERENCE = "Conference"
+    STUDY = "Study"
+    CLINICAL_TRIAL = "ClinicalTrial"
+    CASE_REPORT = "CaseReport"
+    META_ANALYSIS = "MetaAnalysis"
+
+
 class RetrievalConfig(BaseModel):
     papers_per_anchor: int = Field(default=25, ge=1, le=100)
     snippets_per_anchor: int = Field(default=25, ge=1, le=1000)
     retrieval_budget: int = Field(default=300, ge=1)
-    publication_types: str = (
-        "JournalArticle,Conference,Study,ClinicalTrial,CaseReport,MetaAnalysis"
+    publication_types: list[PublicationType] = Field(
+        default_factory=lambda: list(PublicationType)
     )
 
 
@@ -90,7 +111,7 @@ class UMAPConfig(BaseModel):
 
 
 class HDBSCANConfig(BaseModel):
-    min_cluster_size: int | None = Field(
+    mcs: int | None = Field(
         default=11,
         ge=2,
         description=(
@@ -108,14 +129,6 @@ class ClusterConfig(BaseModel):
     hdbscan: HDBSCANConfig = Field(default_factory=HDBSCANConfig)
 
 
-class PipelineConfig(BaseModel):
-    document_extraction: DocumentExtractionConfig = Field(
-        default_factory=DocumentExtractionConfig
-    )
-    retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
-    clustering: ClusterConfig = Field(default_factory=ClusterConfig)
-
-
 def normalize_heading(heading: str, patterns: dict[str, list[str]]) -> str:
     heading_lower = heading.lower().strip()
     for category, pattern_list in patterns.items():
@@ -125,7 +138,10 @@ def normalize_heading(heading: str, patterns: dict[str, list[str]]) -> str:
     return "default"
 
 
-def resolve_min_cluster_size(config: HDBSCANConfig, n_papers: int) -> int:
-    if config.min_cluster_size is not None:
-        return config.min_cluster_size
+def resolve_mcs(config: HDBSCANConfig, n_papers: int) -> int:
+    if config.mcs is not None:
+        return config.mcs
     return max(5, n_papers // 30)
+
+
+PipelineConfig.model_rebuild()
