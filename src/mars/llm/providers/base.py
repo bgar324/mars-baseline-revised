@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Generic, TypeVar
+from typing import Generic, Protocol, TypeVar
 
+import numpy as np
 from pydantic import BaseModel
 
 
@@ -55,6 +56,33 @@ class LLMProvider(ABC):
 
     @abstractmethod
     async def generate_structured(
-        self, *, messages: list[dict[str, str]], schema: type[T]
+        self,
+        *,
+        messages: list[dict[str, str]],
+        schema: type[T],
+        cache_name: str | None = None,
+        temperature: float | None = None,
     ) -> StructuredResponse[T]:
-        """Generate a response parsed into the given Pydantic schema."""
+        """Generate a response and parse it into the given schema.
+
+        ``temperature`` overrides the provider default for this one call.
+        ``cache_name`` reuses a previously cached prompt prefix.
+        """
+
+    @abstractmethod
+    async def create_cache(
+        self, *, system_instruction: str, content: str, ttl_seconds: int = 3600
+    ) -> str:
+        """Store a reusable prompt prefix and return a handle to it."""
+
+    @abstractmethod
+    async def delete_cache(self, cache_name: str) -> None:
+        """Discard a stored prompt prefix."""
+
+
+class EmbeddingProvider(Protocol):
+    """Turns text into embedding vectors."""
+
+    async def embed(self, text: str) -> np.ndarray: ...
+
+    async def embed_batch(self, texts: list[str]) -> np.ndarray: ...

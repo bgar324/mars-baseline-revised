@@ -82,11 +82,13 @@ class GeminiProvider(LLMProvider):
             config=settings,
         )
 
-    def _build_config(self, **extra: Any) -> types.GenerateContentConfig:
+    def _build_config(
+        self, *, temperature: float | None = None, **extra: Any
+    ) -> types.GenerateContentConfig:
         cfg = self._config
         kwargs: dict[str, Any] = dict(
             max_output_tokens=cfg.max_output_tokens,
-            temperature=cfg.temperature,
+            temperature=cfg.temperature if temperature is None else temperature,
             top_p=cfg.top_p,
             top_k=cfg.top_k,
             **extra,
@@ -96,11 +98,18 @@ class GeminiProvider(LLMProvider):
             kwargs["thinking_config"] = thinking_config
         return types.GenerateContentConfig(**kwargs)
 
-    async def _call(self, messages: list[dict[str, str]], **config_extra: Any) -> Any:
+    async def _call(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        temperature: float | None = None,
+        **config_extra: Any,
+    ) -> Any:
         system_instruction, contents = prepare_contents(messages)
-        gen_config = self._build_config(
-            system_instruction=system_instruction, **config_extra
-        )
+        extra = dict(config_extra)
+        if system_instruction is not None:
+            extra["system_instruction"] = system_instruction
+        gen_config = self._build_config(temperature=temperature, **extra)
         try:
             response = await self._client.aio.models.generate_content(
                 model=self._config.model,
@@ -125,17 +134,56 @@ class GeminiProvider(LLMProvider):
         )
 
     async def generate_structured(
-        self, *, messages: list[dict[str, str]], schema: type[T]
+        self,
+        *,
+        messages: list[dict[str, str]],
+        schema: type[T],
+        cache_name: str | None = None,
+        temperature: float | None = None,
     ) -> StructuredResponse[T]:
-        response = await self._call(
-            messages,
-            response_mime_type="application/json",
-            response_schema=schema,
-        )
+        extra: dict[str, Any] = {
+            "response_mime_type": "application/json",
+            "response_schema": schema,
+        }
+        if cache_name is not None:
+            extra["cached_content"] = cache_name
+        response = await self._call(messages, temperature=temperature, **extra)
+        finish_reason = extract_finish_reason(response)
+        if finish_reason and "MAX_TOKENS" in finish_reason:
+            raise LLMProviderError(
+                f"Gemini response truncated at "
+                f"max_output_tokens={self._config.max_output_tokens}; raise the limit"
+            )
         return StructuredResponse(
             parsed=schema.model_validate_json(response.text),
             usage=extract_usage(response),
             model=self._config.model,
             provider=ProviderType.GEMINI,
-            finish_reason=extract_finish_reason(response),
+            finish_reason=finish_reason,
         )
+
+    async def create_cache(
+        self, *, system_instruction: str, content: str, ttl_seconds: int = 3600
+    ) -> str:
+        try:
+            cache = await self._client.aio.caches.create(
+                model=self._config.model,
+                config=types.CreateCachedContentConfig(
+                    system_instruction=system_instruction,
+                    contents=[
+                        types.Content(role="user", parts=[types.Part(text=content)])
+                    ],
+                    ttl=f"{ttl_seconds}s",
+                ),
+            )
+        except Exception as exc:
+            raise LLMProviderError(f"Gemini cache create failed: {exc}") from exc
+        if cache.name is None:
+            raise LLMProviderError("Gemini cache create returned no name")
+        return cache.name
+
+    async def delete_cache(self, cache_name: str) -> None:
+        try:
+            await self._client.aio.caches.delete(name=cache_name)
+        except Exception as exc:
+            raise LLMProviderError(f"Gemini cache delete failed: {exc}") from exc
