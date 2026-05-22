@@ -9,21 +9,26 @@ from mars.config.client import ClientConfig
 
 
 class RateLimiter:
-    """Enforce a minimum interval between requests."""
+    """Enforce a minimum interval between requests, safe under concurrency."""
 
     def __init__(self, min_interval: float) -> None:
         self.min_interval = min_interval
-        self._last_request = 0.0
+        self._next_allowed = 0.0
+        self._lock = asyncio.Lock()
 
     async def wait(self) -> None:
-        """Sleep if needed to respect the minimum interval."""
+        """Sleep until this caller's reserved slot, spaced by min_interval."""
         if self.min_interval <= 0:
             return
 
-        elapsed = time.monotonic() - self._last_request
-        if elapsed < self.min_interval:
-            await asyncio.sleep(self.min_interval - elapsed)
-        self._last_request = time.monotonic()
+        async with self._lock:
+            now = time.monotonic()
+            scheduled = max(now, self._next_allowed)
+            self._next_allowed = scheduled + self.min_interval
+
+        delay = scheduled - now
+        if delay > 0:
+            await asyncio.sleep(delay)
 
 
 class BaseClient(ABC):
