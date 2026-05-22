@@ -2,7 +2,7 @@ import hdbscan
 import numpy as np
 import umap
 
-from mars.config.pipeline import ClusterConfig, resolve_mcs
+from mars.config.pipeline import ClusterConfig, Normalization, resolve_mcs
 from mars.models.s2 import Paper
 
 
@@ -32,6 +32,8 @@ def cluster_papers(
         return {}
 
     embeddings = np.array([p.specter_v2 for p in embedded], dtype=np.float32)
+    embeddings = normalize_embeddings(embeddings, cfg.normalization)
+
     projection = umap.UMAP(
         n_neighbors=cfg.umap.n_neighbors,
         n_components=cfg.umap.n_components,
@@ -52,3 +54,30 @@ def cluster_papers(
     for paper, label in zip(embedded, labels):
         clusters.setdefault(int(label), []).append(paper)
     return clusters
+
+
+def l2_normalize(matrix: np.ndarray) -> np.ndarray:
+    """L2-normalize rows of an embedding matrix."""
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    if float(norms.min()) <= 0.0:
+        raise ValueError("zero-norm vector in embedding matrix")
+    return matrix / norms
+
+
+def center_and_normalize(matrix: np.ndarray) -> np.ndarray:
+    """Center on the matrix mean, then L2-normalize.
+
+    Removes the dominant direction shared by all papers in a topic-filtered
+    subset, exposing within-topic variance for density-based clustering.
+    """
+    centered = matrix - matrix.mean(axis=0)
+    return l2_normalize(centered)
+
+
+def normalize_embeddings(matrix: np.ndarray, mode: Normalization) -> np.ndarray:
+    """Dispatch to the configured normalization strategy."""
+    if mode is Normalization.L2:
+        return l2_normalize(matrix)
+    if mode is Normalization.CENTER_L2:
+        return center_and_normalize(matrix)
+    raise ValueError(f"unknown normalization mode: {mode}")

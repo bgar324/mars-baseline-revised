@@ -124,9 +124,15 @@ class HDBSCANConfig(BaseModel):
     method: str = "leaf"
 
 
+class Normalization(str, Enum):
+    L2 = "l2"
+    CENTER_L2 = "center_l2"
+
+
 class ClusterConfig(BaseModel):
     umap: UMAPConfig = Field(default_factory=UMAPConfig)
     hdbscan: HDBSCANConfig = Field(default_factory=HDBSCANConfig)
+    normalization: Normalization = Normalization.L2
 
 
 def normalize_heading(heading: str, patterns: dict[str, list[str]]) -> str:
