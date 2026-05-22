@@ -9,6 +9,8 @@ Capture:
 - the evaluation standard the community privileges
 - behavioral rules for the agent during debate
 
+Generate the broadest persona that remains faithful to the cluster. The input shows only the top 5 cited papers; treat them as a sample of a larger community, not as the community itself. Choose names, framings, and backgrounds that describe the community's center of gravity. Use broad established field labels (e.g., "Neuroimmunologist") over narrow hyphenated specialties (e.g., "Neuro-Endo-Immunologist"). Specialize only when all 5 papers converge on the same narrow specialty.
+
 reasoning_style describes HOW the community produces evidence (their methodology), not WHAT they reason about. A community studying mechanisms via cohort data is observational or statistical, not mechanistic.
 
 Return valid JSON conforming to the response schema."""
