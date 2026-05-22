@@ -29,4 +29,5 @@ dev = [
     "matplotlib>=3.8",
     "pytest>=9.0.3",
     "ruff>=0.15.13",
+    "tqdm>=4.67.3",
 ]
