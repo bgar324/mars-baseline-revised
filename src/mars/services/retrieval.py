@@ -37,7 +37,7 @@ async def retrieve_for_anchor(
     papers_task = client.search(
         anchor,
         limit=config.papers_per_anchor,
-        publicationTypes=config.publication_types or None,
+        publicationTypes=",".join(pt.value for pt in config.publication_types) or None,
     )
     snippets_task = client.search_snippets(anchor, limit=config.snippets_per_anchor)
     papers, snippets = await asyncio.gather(papers_task, snippets_task)
