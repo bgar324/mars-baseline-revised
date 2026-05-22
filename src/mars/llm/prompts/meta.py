@@ -23,7 +23,7 @@ FOCAL CLAIM: {focal_claim}
 CLUSTER PAPERS (top 5 by citation):
 {cluster_summary}
 
-EXAMPLE 1
+EXAMPLE
 
 FOCAL CLAIM: Chronic stress alters immune function through epigenetic mechanisms.
 CLUSTER PAPERS:
@@ -49,38 +49,12 @@ Output:
   ]
 }}
 
-EXAMPLE 2
-
-FOCAL CLAIM: Chronic stress alters immune function through epigenetic mechanisms.
-CLUSTER PAPERS:
-- Neighborhood disadvantage and DNA methylation in midlife adults
-  TLDR: Census-tract level disadvantage predicted methylation in inflammation-related genes in a 1,200-person cohort.
-- Lifetime adversity and epigenetic age acceleration
-  TLDR: Cumulative life stressors associated with accelerated epigenetic aging in a multi-ethnic sample.
-- EWAS of psychosocial stress in older adults
-  TLDR: Genome-wide methylation associations with chronic stress identified at 23 CpG sites.
-
-Output:
-{{
-  "name": "Social Epigeneticist",
-  "framing": "Chronic stress is a population-scale exposure whose biological signature is detectable through methylation patterns in large cohorts.",
-  "background": "Social epidemiology combined with epigenome-wide association methods. Evidence base spans multi-ethnic cohorts, longitudinal aging studies, and population-scale stress exposure measures.",
-  "reasoning_style": "statistical",
-  "evaluation_lens": "external_validity",
-  "instructions": [
-    "Anchor every claim in cohort-level evidence",
-    "Treat individual mechanism studies as hypothesis-generating, not definitive",
-    "Demand effect sizes that hold across populations",
-    "Account for socioeconomic confounders in any causal claim"
-  ]
-}}
-
 NOW SYNTHESIZE
 
 Output:"""
 
 
-def build_persona_prompt(focal_claim: str, cluster_summary: str) -> str:
+def build_meta_prompt(focal_claim: str, cluster_summary: str) -> str:
     return META_PROMPT.format(
         focal_claim=focal_claim,
         cluster_summary=cluster_summary,

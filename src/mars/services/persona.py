@@ -1,9 +1,9 @@
 import asyncio
 
-from mars.llm.agents.persona import PersonaAgent
+from mars.llm.agents.meta import PersonaAgent
 from mars.llm.providers.base import LLMProvider
+from mars.models.persona import PersonaAgent as PersonaModel
 from mars.models.s2 import Paper
-from mars.schemas.persona import PersonaAgent as PersonaSchema
 
 
 class PersonaService:
@@ -17,7 +17,7 @@ class PersonaService:
         clusters: dict[int, list[Paper]],
         focal_claim: str,
         min_cluster_size: int = 5,
-    ) -> list[PersonaSchema]:
+    ) -> list[PersonaModel]:
         return await synthesize_personas(
             clusters, focal_claim, self._gemini, min_cluster_size
         )
@@ -28,7 +28,7 @@ async def synthesize_personas(
     focal_claim: str,
     provider: LLMProvider,
     min_cluster_size: int = 5,
-) -> list[PersonaSchema]:
+) -> list[PersonaModel]:
     eligible = {
         cid: papers
         for cid, papers in clusters.items()
