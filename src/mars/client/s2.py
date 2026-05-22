@@ -86,7 +86,7 @@ _URL_SITES = (
     "biorxiv.org",
 )
 
-_MAX_RETRIES = 3
+_MAX_RETRIES = 5
 _PAGE_LIMIT = 1000
 _SEARCH_LIMIT = 100
 _BATCH_LIMIT = 500
@@ -168,7 +168,7 @@ class SemanticScholarClient(BaseClient):
         clean_params = (
             {k: v for k, v in params.items() if v is not None} if params else None
         )
-        backoff = 0.5
+        backoff = 1.0
         for attempt in range(_MAX_RETRIES):
             await self._rate_limiter.wait()
             try:
@@ -191,7 +191,14 @@ class SemanticScholarClient(BaseClient):
                     raise SemanticScholarError(
                         f"{response.status_code} from {path} after retries"
                     )
-                await asyncio.sleep(backoff)
+                delay = backoff
+                retry_after = response.headers.get("Retry-After")
+                if retry_after is not None:
+                    try:
+                        delay = float(retry_after)
+                    except ValueError:
+                        pass
+                await asyncio.sleep(delay)
                 backoff *= 2
                 continue
 
