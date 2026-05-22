@@ -1,5 +1,3 @@
-import asyncio
-import logging
 from typing import Any, TypeVar
 
 from google import genai
@@ -7,8 +5,15 @@ from google.genai import types
 from pydantic import BaseModel
 
 from mars.config.settings import GeminiSettings
+from mars.llm.providers.base import (
+    LLMProvider,
+    LLMProviderError,
+    LLMResponse,
+    ProviderType,
+    StructuredResponse,
+    TokenUsage,
+)
 
-logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -40,113 +45,97 @@ def prepare_contents(
     return system_instruction, contents
 
 
-class GoogleGeminiClient:
-    """Async wrapper around the Google GenAI SDK."""
+def extract_usage(response: Any) -> TokenUsage:
+    usage = getattr(response, "usage_metadata", None)
+    if usage is None:
+        return TokenUsage()
+    return TokenUsage(
+        input_tokens=getattr(usage, "prompt_token_count", 0) or 0,
+        output_tokens=getattr(usage, "candidates_token_count", 0) or 0,
+        thinking_tokens=getattr(usage, "thoughts_token_count", 0) or 0,
+        cached_tokens=getattr(usage, "cached_content_token_count", 0) or 0,
+        total_tokens=getattr(usage, "total_token_count", 0) or 0,
+    )
 
-    def __init__(self, *, api_key: str, default_config: GeminiSettings) -> None:
+
+def extract_finish_reason(response: Any) -> str | None:
+    candidates = getattr(response, "candidates", None) or []
+    if not candidates:
+        return None
+    reason = getattr(candidates[0], "finish_reason", None)
+    return str(reason) if reason is not None else None
+
+
+class GeminiProvider(LLMProvider):
+    """Adapter for the Google GenAI SDK."""
+
+    name = ProviderType.GEMINI
+
+    def __init__(self, *, api_key: str, config: GeminiSettings) -> None:
         self._client = genai.Client(api_key=api_key)
-        self._default_config = default_config
+        self._config = config
 
     @classmethod
-    def from_settings(cls, settings: GeminiSettings) -> "GoogleGeminiClient":
+    def from_settings(cls, settings: GeminiSettings) -> "GeminiProvider":
         return cls(
             api_key=settings.api_key.get_secret_value(),
-            default_config=settings,
+            config=settings,
         )
 
-    async def generate(
-        self,
-        *,
-        messages: list[dict[str, str]],
-        config: GeminiSettings | None = None,
-    ) -> str:
-        """Send messages to Gemini and return the generated text."""
-        cfg = config or self._default_config
-        system_instruction, contents = prepare_contents(messages)
-
-        gen_config_kwargs: dict[str, Any] = dict(
-            system_instruction=system_instruction,
+    def _build_config(self, **extra: Any) -> types.GenerateContentConfig:
+        cfg = self._config
+        kwargs: dict[str, Any] = dict(
             max_output_tokens=cfg.max_output_tokens,
             temperature=cfg.temperature,
             top_p=cfg.top_p,
             top_k=cfg.top_k,
+            **extra,
         )
         thinking_config = build_thinking_config(cfg)
         if thinking_config is not None:
-            gen_config_kwargs["thinking_config"] = thinking_config
+            kwargs["thinking_config"] = thinking_config
+        return types.GenerateContentConfig(**kwargs)
 
-        gen_config = types.GenerateContentConfig(**gen_config_kwargs)
-
-        response = await self._client.aio.models.generate_content(
-            model=cfg.model,
-            contents=contents,  # type: ignore[arg-type]
-            config=gen_config,
+    async def _call(self, messages: list[dict[str, str]], **config_extra: Any) -> Any:
+        system_instruction, contents = prepare_contents(messages)
+        gen_config = self._build_config(
+            system_instruction=system_instruction, **config_extra
         )
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._config.model,
+                contents=contents,  # type: ignore[arg-type]
+                config=gen_config,
+            )
+        except Exception as exc:
+            raise LLMProviderError(f"Gemini call failed: {exc}") from exc
 
         if not response.text:
-            raise RuntimeError("Gemini returned an empty response")
+            raise LLMProviderError("Gemini returned an empty response")
+        return response
 
-        return response.text
-
-    async def generate_completions(
-        self,
-        *,
-        messages: list[dict[str, str]],
-        n: int = 1,
-        config: GeminiSettings | None = None,
-    ) -> str | list[str]:
-        """Generate one or more completions, firing n concurrent requests."""
-        if n <= 1:
-            return await self.generate(messages=messages, config=config)
-
-        tasks = [self.generate(messages=messages, config=config) for _ in range(n)]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        completions: list[str] = []
-        for result in results:
-            if isinstance(result, BaseException):
-                logger.warning("Gemini concurrent call failed: %s", result)
-                continue
-            completions.append(result)
-
-        if not completions:
-            raise RuntimeError("All Gemini concurrent generation calls failed")
-
-        return completions
+    async def generate(self, *, messages: list[dict[str, str]]) -> LLMResponse:
+        response = await self._call(messages)
+        return LLMResponse(
+            content=response.text,
+            usage=extract_usage(response),
+            model=self._config.model,
+            provider=ProviderType.GEMINI,
+            finish_reason=extract_finish_reason(response),
+        )
 
     async def generate_structured(
-        self,
-        *,
-        messages: list[dict[str, str]],
-        schema: type[T],
-        config: GeminiSettings | None = None,
-    ) -> T:
-        """Send messages to Gemini and parse the response into a Pydantic model."""
-        cfg = config or self._default_config
-        system_instruction, contents = prepare_contents(messages)
-
-        gen_config_kwargs: dict[str, Any] = dict(
-            system_instruction=system_instruction,
-            max_output_tokens=cfg.max_output_tokens,
-            temperature=cfg.temperature,
-            top_p=cfg.top_p,
-            top_k=cfg.top_k,
+        self, *, messages: list[dict[str, str]], schema: type[T]
+    ) -> StructuredResponse[T]:
+        response = await self._call(
+            messages,
             response_mime_type="application/json",
             response_schema=schema,
         )
-        thinking_config = build_thinking_config(cfg)
-        if thinking_config is not None:
-            gen_config_kwargs["thinking_config"] = thinking_config
-
-        gen_config = types.GenerateContentConfig(**gen_config_kwargs)
-
-        response = await self._client.aio.models.generate_content(
-            model=cfg.model,
-            contents=contents,  # type: ignore[arg-type]
-            config=gen_config,
+        return StructuredResponse(
+            parsed=schema.model_validate_json(response.text),
+            usage=extract_usage(response),
+            model=self._config.model,
+            provider=ProviderType.GEMINI,
+            finish_reason=extract_finish_reason(response),
         )
-
-        if not response.text:
-            raise RuntimeError("Gemini returned an empty response")
-
-        return schema.model_validate_json(response.text)
