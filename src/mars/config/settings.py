@@ -1,6 +1,8 @@
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from mars.config.pipeline import PipelineConfig
+
 
 class GeminiSettings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -72,3 +74,4 @@ class AppSettings(BaseSettings):
     langextract: LangExtractSettings = Field(default_factory=LangExtractSettings)
     supabase: SupabaseSettings = Field(default_factory=SupabaseSettings)
     s2: SemanticScholarSettings = Field(default_factory=SemanticScholarSettings)
+    pipeline: PipelineConfig = Field(default_factory=PipelineConfig)

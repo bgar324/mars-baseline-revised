@@ -12,6 +12,29 @@ from mars.schemas.query import (
 )
 
 
+class RetrievalService:
+    """Pipeline stage service for literature retrieval."""
+
+    def __init__(
+        self,
+        *,
+        s2: SemanticScholarClient,
+        config: RetrievalConfig | None = None,
+    ) -> None:
+        self._s2 = s2
+        self._config = config or RetrievalConfig()
+
+    async def retrieve(
+        self,
+        extracted: ExtractedQuery,
+        expansion: QueryExpansion,
+        questions: HypotheticalQuestions,
+    ) -> list[Paper]:
+        return await retrieve_literature(
+            extracted, expansion, questions, self._s2, self._config
+        )
+
+
 def build_anchors(
     extracted: ExtractedQuery,
     expansion: QueryExpansion,

@@ -6,6 +6,16 @@ from mars.config.pipeline import ClusterConfig, resolve_mcs
 from mars.models.s2 import Paper
 
 
+class ClusterService:
+    """Pipeline stage service for clustering retrieved papers."""
+
+    def __init__(self, *, config: ClusterConfig | None = None) -> None:
+        self._config = config
+
+    def cluster(self, papers: list[Paper]) -> dict[int, list[Paper]]:
+        return cluster_papers(papers, self._config)
+
+
 def cluster_papers(
     papers: list[Paper],
     config: ClusterConfig | None = None,
