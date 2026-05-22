@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 from typing import Any
 
@@ -17,6 +18,8 @@ from mars.models.s2 import (
     Snippet,
     TextSpan,
 )
+
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.semanticscholar.org"
 
@@ -104,6 +107,10 @@ class SemanticScholarClient(BaseClient):
     def __init__(self, config: ClientConfig) -> None:
         super().__init__(config)
         if config.api_key is None:
+            logger.warning(
+                "No Semantic Scholar API key; using the shared unauthenticated "
+                "rate pool. Set SEMANTIC_SCHOLAR_API_KEY to authenticate."
+            )
             self._rate_limiter.min_interval = max(
                 self._rate_limiter.min_interval, UNAUTHENTICATED_INTERVAL
             )
