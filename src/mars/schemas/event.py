@@ -88,3 +88,24 @@ class ClusterGroup(BaseModel):
 class ClusterAssignment(BaseModel):
     clusters: list[ClusterGroup]
     noise_paper_ids: list[str] = Field(default_factory=list)
+
+
+class DebateEventType(str, Enum):
+    DEBATE_STARTED = "debate.started"
+    CYCLE_STARTED = "cycle.started"
+    TURN_PRODUCED = "turn.produced"
+    CYCLE_SYNTHESIZED = "cycle.synthesized"
+    STANCE_UPDATED = "stance.updated"
+    CYCLE_AWAITING = "cycle.awaiting"
+    HYPOTHESIS_ACCEPTED = "hypothesis.accepted"
+    CYCLE_CLOSED = "cycle.closed"
+    CYCLE_BRANCHED = "cycle.branched"
+    CORPUS_EXPANDED = "corpus.expanded"
+
+
+class DebateEvent(BaseModel):
+    event: DebateEventType
+    debate_id: str
+    cycle_id: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    timestamp: datetime

@@ -3,8 +3,11 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from mars.api.dependencies import get_pipeline
+from mars.api.dependencies import get_debate_service, get_pipeline
+from mars.models.debate import Cycle, Debate, DebateDecision
+from mars.models.persona import PersonaAgent
 from mars.models.s2 import Paper
+from mars.schemas.debate import DebateRequest
 from mars.schemas.event import (
     ClusterAssignment,
     ClusterGroup,
@@ -12,13 +15,19 @@ from mars.schemas.event import (
     QueryRequest,
     StageName,
 )
-from mars.schemas.persona import PersonaAgent
+from mars.services.debate import (
+    DebateError,
+    DebateService,
+)
+from mars.services.debate import (
+    NotFoundError as DebateNotFoundError,
+)
 from mars.services.pipeline import NotFoundError, PipelineService, PrerequisiteError
 
-router = APIRouter(prefix="/api/v1/queries", tags=["queries"])
+query_router = APIRouter(prefix="/api/v1/queries", tags=["queries"])
 
 
-@router.post("")
+@query_router.post("")
 async def create_query(
     request: QueryRequest,
     pipeline: PipelineService = Depends(get_pipeline),
@@ -27,7 +36,7 @@ async def create_query(
     return await pipeline.create_query(request.query)
 
 
-@router.get("/{query_id}")
+@query_router.get("/{query_id}")
 async def get_query(
     query_id: str,
     pipeline: PipelineService = Depends(get_pipeline),
@@ -38,7 +47,7 @@ async def get_query(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/{query_id}/events")
+@query_router.get("/{query_id}/events")
 async def stream_events(
     query_id: str,
     pipeline: PipelineService = Depends(get_pipeline),
@@ -67,21 +76,21 @@ async def _run_stage(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.post("/{query_id}/retrieve")
+@query_router.post("/{query_id}/retrieve")
 async def run_retrieve(
     query_id: str, pipeline: PipelineService = Depends(get_pipeline)
 ) -> PipelineState:
     return await _run_stage(query_id, StageName.RETRIEVE, pipeline)
 
 
-@router.post("/{query_id}/clusters")
+@query_router.post("/{query_id}/clusters")
 async def run_clusters(
     query_id: str, pipeline: PipelineService = Depends(get_pipeline)
 ) -> PipelineState:
     return await _run_stage(query_id, StageName.CLUSTER, pipeline)
 
 
-@router.post("/{query_id}/personas")
+@query_router.post("/{query_id}/personas")
 async def run_personas(
     query_id: str, pipeline: PipelineService = Depends(get_pipeline)
 ) -> PipelineState:
@@ -95,14 +104,14 @@ def _artifact(query_id: str, stage: StageName, pipeline: PipelineService):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/{query_id}/papers")
+@query_router.get("/{query_id}/papers")
 async def get_papers(
     query_id: str, pipeline: PipelineService = Depends(get_pipeline)
 ) -> list[Paper]:
     return _artifact(query_id, StageName.RETRIEVE, pipeline)
 
 
-@router.get("/{query_id}/clusters")
+@query_router.get("/{query_id}/clusters")
 async def get_clusters(
     query_id: str, pipeline: PipelineService = Depends(get_pipeline)
 ) -> ClusterAssignment:
@@ -116,8 +125,94 @@ async def get_clusters(
     return ClusterAssignment(clusters=groups, noise_paper_ids=noise)
 
 
-@router.get("/{query_id}/personas")
+@query_router.get("/{query_id}/personas")
 async def get_personas(
     query_id: str, pipeline: PipelineService = Depends(get_pipeline)
 ) -> list[PersonaAgent]:
     return _artifact(query_id, StageName.PERSONA, pipeline)
+
+
+debate_router = APIRouter(prefix="/api/v1/debates", tags=["debates"])
+
+
+def _http_error(exc: DebateError) -> HTTPException:
+    status = 404 if isinstance(exc, DebateNotFoundError) else 409
+    return HTTPException(status_code=status, detail=str(exc))
+
+
+@debate_router.post("")
+async def create_debate(
+    request: DebateRequest,
+    service: DebateService = Depends(get_debate_service),
+) -> Debate:
+    """Create a debate with its root cycle and start the event stream."""
+    return await service.start(
+        focal_claim=request.focal_claim,
+        agents=request.agents,
+        cluster_papers=request.cluster_papers,
+    )
+
+
+@debate_router.get("/{debate_id}")
+async def get_debate(
+    debate_id: str,
+    service: DebateService = Depends(get_debate_service),
+) -> Debate:
+    try:
+        return service.get_debate(debate_id)
+    except DebateError as exc:
+        raise _http_error(exc) from exc
+
+
+@debate_router.get("/{debate_id}/cycles/{cycle_id}")
+async def get_cycle(
+    debate_id: str,
+    cycle_id: str,
+    service: DebateService = Depends(get_debate_service),
+) -> Cycle:
+    try:
+        return service.get_cycle(debate_id, cycle_id)
+    except DebateError as exc:
+        raise _http_error(exc) from exc
+
+
+@debate_router.post("/{debate_id}/cycles/{cycle_id}/run")
+async def run_cycle(
+    debate_id: str,
+    cycle_id: str,
+    service: DebateService = Depends(get_debate_service),
+) -> Cycle:
+    try:
+        return await service.run_cycle(debate_id=debate_id, cycle_id=cycle_id)
+    except DebateError as exc:
+        raise _http_error(exc) from exc
+
+
+@debate_router.post("/{debate_id}/steer")
+async def steer_debate(
+    debate_id: str,
+    decision: DebateDecision,
+    service: DebateService = Depends(get_debate_service),
+) -> Cycle | None:
+    try:
+        return await service.steer(debate_id=debate_id, decision=decision)
+    except DebateError as exc:
+        raise _http_error(exc) from exc
+
+
+@debate_router.get("/{debate_id}/events")
+async def stream_debate_events(
+    debate_id: str,
+    service: DebateService = Depends(get_debate_service),
+) -> StreamingResponse:
+    """Server-sent event stream of DebateEvents for a debate."""
+    try:
+        service.get_debate(debate_id)
+    except DebateError as exc:
+        raise _http_error(exc) from exc
+
+    async def event_stream() -> AsyncIterator[str]:
+        async for event in service.subscribe(debate_id):
+            yield f"data: {event.model_dump_json()}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

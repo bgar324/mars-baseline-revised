@@ -1,10 +1,12 @@
 from functools import lru_cache
 
 from mars.client.s2 import SemanticScholarClient
-from mars.config.settings import AppSettings
+from mars.config.settings import AppSettings, DebateSettings
 from mars.llm.providers.gemini import GeminiProvider
+from mars.llm.providers.huggingface import HuggingFaceProvider
 from mars.llm.providers.langextract import LangExtractProvider
 from mars.services.cluster import ClusterService
+from mars.services.debate import DebateService
 from mars.services.persona import PersonaService
 from mars.services.pipeline import PipelineService
 from mars.services.query import QueryService
@@ -33,6 +35,11 @@ def get_langextract() -> LangExtractProvider:
     return LangExtractProvider(_settings.langextract)
 
 
+@lru_cache(maxsize=1)
+def get_embedding_provider() -> HuggingFaceProvider:
+    return HuggingFaceProvider(model_name=_settings.huggingface.model_name)
+
+
 def get_query_service() -> QueryService:
     return QueryService(langextract=get_langextract(), gemini=get_gemini())
 
@@ -56,4 +63,20 @@ def get_pipeline() -> PipelineService:
         retrieval=get_retrieval_service(),
         cluster=get_cluster_service(),
         persona=get_persona_service(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_debate_provider() -> GeminiProvider:
+    return GeminiProvider.from_settings(
+        DebateSettings(api_key=_settings.gemini.api_key)
+    )
+
+
+@lru_cache(maxsize=1)
+def get_debate_service() -> DebateService:
+    return DebateService(
+        llm=get_debate_provider(),
+        embedder=get_embedding_provider(),
+        s2=get_s2(),
     )

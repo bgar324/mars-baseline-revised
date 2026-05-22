@@ -21,6 +21,19 @@ class GeminiSettings(BaseSettings):
     thinking_level: str | None = None
 
 
+class DebateSettings(GeminiSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="DEBATE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    temperature: float = Field(default=0.2, ge=0.0, le=2.0)
+    max_output_tokens: int = Field(default=8192, ge=100, le=8192)
+    thinking_level: str | None = "low"
+
+
 class LangExtractSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="LANGEXTRACT_",
@@ -63,6 +76,17 @@ class SemanticScholarSettings(BaseSettings):
     min_request_interval: float = 1.0
 
 
+class HuggingFaceSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="HF_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    model_name: str = "allenai/specter2_base"
+
+
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -74,4 +98,5 @@ class AppSettings(BaseSettings):
     langextract: LangExtractSettings = Field(default_factory=LangExtractSettings)
     supabase: SupabaseSettings = Field(default_factory=SupabaseSettings)
     s2: SemanticScholarSettings = Field(default_factory=SemanticScholarSettings)
+    huggingface: HuggingFaceSettings = Field(default_factory=HuggingFaceSettings)
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)

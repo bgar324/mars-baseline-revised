@@ -410,6 +410,27 @@ class SemanticScholarClient(BaseClient):
             papers.extend(self._parse_paper(p) for p in data or [] if p)
         return papers
 
+    async def recommendations(
+        self,
+        *,
+        positive_paper_ids: list[str],
+        negative_paper_ids: list[str] | None = None,
+        limit: int = 100,
+    ) -> list[Paper]:
+        """Papers recommended from sets of liked and disliked seed papers."""
+        data = await self._request(
+            "POST",
+            "/recommendations/v1/papers/",
+            params={"fields": _PAPER_FIELDS, "limit": limit},
+            json={
+                "positivePaperIds": [self._normalize_id(i) for i in positive_paper_ids],
+                "negativePaperIds": [
+                    self._normalize_id(i) for i in (negative_paper_ids or [])
+                ],
+            },
+        )
+        return [self._parse_paper(p) for p in (data or {}).get("recommendedPapers", [])]
+
     async def search_snippets(
         self, query: str, *, limit: int = 10, **filters: Any
     ) -> list[Snippet]:
