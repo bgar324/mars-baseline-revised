@@ -61,8 +61,13 @@ async def retrieve_for_anchor(
         anchor,
         limit=config.papers_per_anchor,
         publicationTypes=",".join(pt.value for pt in config.publication_types) or None,
+        minCitationCount=config.min_citation_count,
     )
-    snippets_task = client.search_snippets(anchor, limit=config.snippets_per_anchor)
+    snippets_task = client.search_snippets(
+        anchor,
+        limit=config.snippets_per_anchor,
+        minCitationCount=config.min_citation_count,
+    )
     papers, snippets = await asyncio.gather(papers_task, snippets_task)
     return papers + [s.paper for s in snippets]
 

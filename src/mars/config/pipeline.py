@@ -100,6 +100,7 @@ class RetrievalConfig(BaseModel):
     publication_types: list[PublicationType] = Field(
         default_factory=lambda: list(PublicationType)
     )
+    min_citation_count: int = Field(default=1, ge=1)
 
 
 class UMAPConfig(BaseModel):
