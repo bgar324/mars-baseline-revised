@@ -40,6 +40,8 @@ def cluster_papers(
         min_dist=cfg.umap.min_dist,
         metric=cfg.umap.metric,
         random_state=cfg.umap.random_state,
+        init="random",
+        n_jobs=-1,
     ).fit_transform(embeddings)
 
     mcs = resolve_mcs(cfg.hdbscan, len(embedded))

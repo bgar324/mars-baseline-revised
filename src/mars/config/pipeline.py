@@ -108,7 +108,7 @@ class UMAPConfig(BaseModel):
     n_components: int = Field(default=10, ge=2, le=50)
     min_dist: float = Field(default=0.0, ge=0.0, le=1.0)
     metric: str = "cosine"
-    random_state: int = 42
+    random_state: int | None = None
 
 
 class HDBSCANConfig(BaseModel):
