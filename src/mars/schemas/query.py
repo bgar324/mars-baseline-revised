@@ -23,7 +23,7 @@ class ExtractedQuery(BaseModel):
 
 class ExpandedConstruct(BaseModel):
     construct_id: str = Field(description="ID of the source QuerySpan")
-    construct: str = Field(description="Original construct text")
+    construct_text: str = Field(description="Original construct text")
     expansions: list[str] = Field(
         description="Semantically related terms for literature retrieval",
         min_length=5,

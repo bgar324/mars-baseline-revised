@@ -41,7 +41,7 @@ def build_anchors(
     questions: HypotheticalQuestions,
 ) -> RetrievalAnchors:
     construct_queries = [
-        f"{ec.construct} {' '.join(ec.expansions)}" for ec in expansion.expansions
+        f"{ec.construct_text} {' '.join(ec.expansions)}" for ec in expansion.expansions
     ]
     claim_span = next(
         (s for s in extracted.spans if s.role == SemanticRole.CLAIM),
