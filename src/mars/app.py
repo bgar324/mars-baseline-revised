@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -7,9 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from mars.api.dependencies import get_embedding_provider, get_s2
 from mars.api.router import debate_router, query_router
 
+logging.getLogger("absl").setLevel(logging.ERROR)
+
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     get_embedding_provider()
     yield
     await get_s2().aclose()
