@@ -1,0 +1,65 @@
+.react-flow__background {
+  background-color: #f1f2f3;
+}
+
+/* position zoom controls bottom-left */
+.react-flow__controls {
+  bottom: 16px !important;
+  left: 5px !important;
+  top: auto !important;
+  right: auto !important;
+  transform: none !important;
+  flex-direction: column !important;
+  transition: left 0.2s ease-in-out !important;
+  transform-origin: left center !important;
+  background: color-mix(in oklch, var(--background) 95%, transparent) !important;
+  backdrop-filter: blur(24px) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: none !important;
+  padding: 4px !important;
+  gap: 4px !important;
+}
+
+.react-flow__controls-button {
+  margin: 0 !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: var(--radius-lg) !important;
+  background: transparent !important;
+  border: none !important;
+  color: var(--muted-foreground) !important;
+  transition: all 0.2s !important;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--muted) !important;
+  color: var(--foreground) !important;
+}
+
+.react-flow__controls-button svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.react-flow__container[data-tool="hand"] {
+  cursor: grab !important;
+}
+
+.react-flow__container[data-tool="hand"]:active {
+  cursor: grabbing !important;
+}
+
+.react-flow__container[data-tool="select"] {
+  cursor: default !important;
+}
+
+.react-flow__container[data-tool="hand"] .react-flow__node {
+  cursor: grab !important;
+}
+
+@keyframes dashdraw {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
