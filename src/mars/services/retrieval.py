@@ -1,4 +1,5 @@
 import asyncio
+from typing import Literal
 
 from mars.client.s2 import SemanticScholarClient
 from mars.config.pipeline import RetrievalConfig
@@ -10,6 +11,9 @@ from mars.schemas.query import (
     RetrievalAnchors,
     SemanticRole,
 )
+
+
+AnchorMode = Literal["search", "snippets"]
 
 
 class RetrievalService:
@@ -55,21 +59,25 @@ def build_anchors(
 
 
 async def retrieve_for_anchor(
-    client: SemanticScholarClient, anchor: str, config: RetrievalConfig
+    client: SemanticScholarClient,
+    anchor: str,
+    config: RetrievalConfig,
+    mode: AnchorMode,
 ) -> list[Paper]:
-    papers_task = client.search(
-        anchor,
-        limit=config.papers_per_anchor,
-        publicationTypes=",".join(pt.value for pt in config.publication_types) or None,
-        minCitationCount=config.min_citation_count,
-    )
-    snippets_task = client.search_snippets(
+    if mode == "search":
+        return await client.search(
+            anchor,
+            limit=config.papers_per_anchor,
+            publicationTypes=",".join(pt.value for pt in config.publication_types)
+            or None,
+            minCitationCount=config.min_citation_count,
+        )
+    snippets = await client.search_snippets(
         anchor,
         limit=config.snippets_per_anchor,
         minCitationCount=config.min_citation_count,
     )
-    papers, snippets = await asyncio.gather(papers_task, snippets_task)
-    return papers + [s.paper for s in snippets]
+    return [s.paper for s in snippets]
 
 
 def deduplicate(papers: list[Paper]) -> list[Paper]:
@@ -93,12 +101,19 @@ async def retrieve_candidates(
     anchors: RetrievalAnchors,
     config: RetrievalConfig,
 ) -> list[Paper]:
-    queries = [*anchors.construct_queries, *anchors.hypothetical_queries]
-    if anchors.claim_query:
-        queries.append(anchors.claim_query)
-    results = await asyncio.gather(
-        *(retrieve_for_anchor(client, q, config) for q in queries)
+    tasks: list = [
+        retrieve_for_anchor(client, q, config, mode="search")
+        for q in anchors.construct_queries
+    ]
+    tasks.extend(
+        retrieve_for_anchor(client, q, config, mode="snippets")
+        for q in anchors.hypothetical_queries
     )
+    if anchors.claim_query:
+        tasks.append(
+            retrieve_for_anchor(client, anchors.claim_query, config, mode="snippets")
+        )
+    results = await asyncio.gather(*tasks)
     flat = [p for sub in results for p in sub]
     snippet_corpus_ids = {
         p.corpus_id for p in flat if not p.id and p.corpus_id is not None
