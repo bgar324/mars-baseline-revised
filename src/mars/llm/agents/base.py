@@ -53,5 +53,5 @@ class BaseAgent(BaseModel, Generic[ResponseT]):
             except Exception as exc:
                 last_error = exc
         raise AgentError(
-            f"{self.name} failed after {self.max_retries} attempts"
+            f"{self.name} failed after {self.max_retries} attempts: {last_error}"
         ) from last_error

@@ -6,7 +6,7 @@ from mars.models.persona import PersonaAgent as PersonaModel
 from mars.models.s2 import Paper
 
 
-N_PAPERS = 5
+N_PAPERS = 3
 
 
 def format_cluster(papers: list[Paper], n_papers: int = N_PAPERS) -> str:
