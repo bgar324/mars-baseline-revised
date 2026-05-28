@@ -85,6 +85,7 @@ class HuggingFaceSettings(BaseSettings):
     )
 
     model_name: str = "allenai/specter2_base"
+    token: SecretStr | None = None
 
 
 class AppSettings(BaseSettings):

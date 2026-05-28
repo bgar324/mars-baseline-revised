@@ -37,7 +37,11 @@ def get_langextract() -> LangExtractProvider:
 
 @lru_cache(maxsize=1)
 def get_embedding_provider() -> HuggingFaceProvider:
-    return HuggingFaceProvider(model_name=_settings.huggingface.model_name)
+    token = _settings.huggingface.token
+    return HuggingFaceProvider(
+        model_name=_settings.huggingface.model_name,
+        token=token.get_secret_value() if token else None,
+    )
 
 
 def get_query_service() -> QueryService:
