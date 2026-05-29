@@ -83,7 +83,11 @@ class GeminiProvider(LLMProvider):
         )
 
     def _build_config(
-        self, *, temperature: float | None = None, **extra: Any
+        self,
+        *,
+        temperature: float | None = None,
+        thinking_disabled: bool = False,
+        **extra: Any,
     ) -> types.GenerateContentConfig:
         cfg = self._config
         kwargs: dict[str, Any] = dict(
@@ -93,9 +97,10 @@ class GeminiProvider(LLMProvider):
             top_k=cfg.top_k,
             **extra,
         )
-        thinking_config = build_thinking_config(cfg)
-        if thinking_config is not None:
-            kwargs["thinking_config"] = thinking_config
+        if not thinking_disabled:
+            thinking_config = build_thinking_config(cfg)
+            if thinking_config is not None:
+                kwargs["thinking_config"] = thinking_config
         return types.GenerateContentConfig(**kwargs)
 
     async def _call(
@@ -103,13 +108,18 @@ class GeminiProvider(LLMProvider):
         messages: list[dict[str, str]],
         *,
         temperature: float | None = None,
+        thinking_disabled: bool = False,
         **config_extra: Any,
     ) -> Any:
         system_instruction, contents = prepare_contents(messages)
         extra = dict(config_extra)
         if system_instruction is not None:
             extra["system_instruction"] = system_instruction
-        gen_config = self._build_config(temperature=temperature, **extra)
+        gen_config = self._build_config(
+            temperature=temperature,
+            thinking_disabled=thinking_disabled,
+            **extra,
+        )
         try:
             response = await self._client.aio.models.generate_content(
                 model=self._config.model,
@@ -140,6 +150,7 @@ class GeminiProvider(LLMProvider):
         schema: type[T],
         cache_name: str | None = None,
         temperature: float | None = None,
+        thinking_disabled: bool = False,
     ) -> StructuredResponse[T]:
         extra: dict[str, Any] = {
             "response_mime_type": "application/json",
@@ -147,7 +158,12 @@ class GeminiProvider(LLMProvider):
         }
         if cache_name is not None:
             extra["cached_content"] = cache_name
-        response = await self._call(messages, temperature=temperature, **extra)
+        response = await self._call(
+            messages,
+            temperature=temperature,
+            thinking_disabled=thinking_disabled,
+            **extra,
+        )
         finish_reason = extract_finish_reason(response)
         if finish_reason and "MAX_TOKENS" in finish_reason:
             raise LLMProviderError(

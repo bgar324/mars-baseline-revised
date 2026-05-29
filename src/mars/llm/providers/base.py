@@ -62,11 +62,14 @@ class LLMProvider(ABC):
         schema: type[T],
         cache_name: str | None = None,
         temperature: float | None = None,
+        thinking_disabled: bool = False,
     ) -> StructuredResponse[T]:
         """Generate a response and parse it into the given schema.
 
         ``temperature`` overrides the provider default for this one call.
         ``cache_name`` reuses a previously cached prompt prefix.
+        ``thinking_disabled`` skips reasoning tokens for this call so the
+        full output budget goes to the structured response.
         """
 
     @abstractmethod

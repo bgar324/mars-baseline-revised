@@ -1,8 +1,11 @@
 import asyncio
+import os
 import time
 from collections import OrderedDict
 from collections.abc import Callable
 from typing import TypeVar
+
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import numpy as np
 import torch
