@@ -14,7 +14,7 @@ from mars.schemas.event import (
     StageNode,
     StageStatus,
 )
-from mars.schemas.query import SemanticRole
+from mars.schemas.query import ExtractedQuery
 from mars.services.cluster import ClusterService
 from mars.services.persona import PersonaService
 from mars.services.query import QueryService
@@ -39,7 +39,7 @@ def _now() -> datetime:
 
 def _summary(stage: StageName, result: Any) -> dict[str, Any]:
     if stage is StageName.EXTRACT:
-        return {"spans": len(result.spans)}
+        return {"spans": len(result.spans), "claim": result.claim}
     if stage is StageName.EXPAND:
         expansion, questions = result
         return {"domain": expansion.domain, "questions": len(questions.questions)}
@@ -118,6 +118,18 @@ class PipelineService:
             raise NotFoundError(f"stage '{stage.value}' has not completed")
         return self._artifacts[query_id][stage]
 
+    def update_claim(self, query_id: str, claim: str) -> PipelineState:
+        state = self._require(query_id)
+        node = state.stages[StageName.EXTRACT]
+        if node.status is not StageStatus.COMPLETE:
+            raise PrerequisiteError("stage 'extract' has not completed")
+        extracted: ExtractedQuery = self._artifacts[query_id][StageName.EXTRACT]
+        updated = extracted.model_copy(update={"claim": claim})
+        self._artifacts[query_id][StageName.EXTRACT] = updated
+        node.result = _summary(StageName.EXTRACT, updated)
+        self._touch(query_id)
+        return state
+
     async def subscribe(self, query_id: str) -> AsyncIterator[PipelineEvent]:
         """Yield pipeline events for a query until the caller disconnects."""
         self._require(query_id)
@@ -180,6 +192,7 @@ class PipelineService:
             return
 
         self._artifacts[query_id][stage] = result
+        node.result = _summary(stage, result)
         node.status = StageStatus.COMPLETE
         node.completed_at = _now()
         self._touch(query_id)
@@ -210,13 +223,8 @@ class PipelineService:
                 self._cluster.cluster, arts[StageName.RETRIEVE]
             )
         if stage is StageName.PERSONA:
-            extracted = arts[StageName.EXTRACT]
-            claim = (
-                next(
-                    (s.text for s in extracted.spans if s.role == SemanticRole.CLAIM),
-                    None,
-                )
-                or self._text[query_id]
+            extracted: ExtractedQuery = arts[StageName.EXTRACT]
+            return await self._persona.synthesize(
+                arts[StageName.CLUSTER], extracted.claim
             )
-            return await self._persona.synthesize(arts[StageName.CLUSTER], claim)
         raise PipelineError(f"unknown stage: {stage}")

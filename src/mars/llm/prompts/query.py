@@ -79,3 +79,42 @@ def build_expansion_prompt(
         domain=domain or "unspecified",
         constructs=construct_lines,
     )
+
+
+CLAIM_PROMPT = """\
+Rewrite the research query as one declarative claim.
+
+Rules:
+- One sentence, present tense, no hedging.
+- Keep every construct from the query.
+- Strip interrogatives (how, why, whether, does) and turn them into the implied assertion.
+- Do not add information the query does not imply.
+- Output the sentence only, no commentary.
+
+QUERY:
+{query}
+
+EXTRACTED SPANS:
+{spans}
+"""
+
+
+def build_claim_prompt(
+    query: str,
+    *,
+    domain: str | None,
+    goal: str | None,
+    constructs: list[str],
+    claim: str | None,
+) -> str:
+    lines: list[str] = []
+    if domain:
+        lines.append(f"domain: {domain}")
+    if goal:
+        lines.append(f"goal: {goal}")
+    if constructs:
+        lines.append(f"constructs: {'; '.join(constructs)}")
+    if claim:
+        lines.append(f"claim: {claim}")
+    rendered = "\n".join(lines) if lines else "(none)"
+    return CLAIM_PROMPT.format(query=query, spans=rendered)

@@ -1,5 +1,6 @@
 from mars.llm.prompts.query import (
     SYSTEM_INSTRUCTION as EXPANSION_SYSTEM,
+    build_claim_prompt,
     build_expansion_prompt,
 )
 from mars.llm.prompts.question import (
@@ -30,9 +31,36 @@ class QueryService:
         self._gemini = gemini
 
     async def extract(self, query: str) -> ExtractedQuery:
-        """Semantic role labeling of the raw query."""
+        """Semantic role labeling and declarative-claim synthesis."""
         result = await self._langextract.extract(query)
-        return srl_to_extracted_query(query, result)
+        spans = srl_to_spans(result)
+        claim = await self._synthesize_claim(query, spans)
+        return ExtractedQuery(raw_text=query, spans=spans, claim=claim)
+
+    async def _synthesize_claim(
+        self, query: str, spans: list[QuerySpan]
+    ) -> str:
+        domain = next(
+            (s.text for s in spans if s.role == SemanticRole.DOMAIN), None
+        )
+        goal = next(
+            (s.text for s in spans if s.role == SemanticRole.GOAL), None
+        )
+        constructs = [s.text for s in spans if s.role == SemanticRole.CONSTRUCT]
+        raw_claim = next(
+            (s.text for s in spans if s.role == SemanticRole.CLAIM), None
+        )
+        prompt = build_claim_prompt(
+            query=query,
+            domain=domain,
+            goal=goal,
+            constructs=constructs,
+            claim=raw_claim,
+        )
+        response = await self._gemini.generate(
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content.strip()
 
     async def expand(
         self, extracted: ExtractedQuery
@@ -92,8 +120,8 @@ ROLE_MAP = {
 ID_PREFIX = {"domain": "d", "goal": "g", "construct": "c", "claim": "claim"}
 
 
-def srl_to_extracted_query(raw_text: str, result) -> ExtractedQuery:
-    """Map a langextract AnnotatedDocument into an ExtractedQuery."""
+def srl_to_spans(result) -> list[QuerySpan]:
+    """Map a langextract AnnotatedDocument into role-labeled QuerySpans."""
     spans: list[QuerySpan] = []
     counters = {role: 0 for role in ROLE_MAP}
     for ext in result.extractions:
@@ -114,4 +142,4 @@ def srl_to_extracted_query(raw_text: str, result) -> ExtractedQuery:
                 role=ROLE_MAP[cls],
             )
         )
-    return ExtractedQuery(raw_text=raw_text, spans=spans)
+    return spans

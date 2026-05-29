@@ -19,6 +19,11 @@ class QuerySpan(BaseModel):
 class ExtractedQuery(BaseModel):
     raw_text: str
     spans: list[QuerySpan]
+    claim: str
+
+
+class ClaimUpdate(BaseModel):
+    claim: str
 
 
 class ExpandedConstruct(BaseModel):
