@@ -12,11 +12,20 @@ async function fetchPapers(queryId: string): Promise<Paper[]> {
 
 export function usePapers() {
   const queryId = useAgentBuilderStore((s) => s.queryId)
+  const retrieveStage = useAgentBuilderStore(
+    (s) => s.pipelineStages.retrieve,
+  )
+  const ready = !!queryId && retrieveStage === "complete"
 
   return useQuery({
     queryKey: ["papers", queryId],
     queryFn: () => fetchPapers(queryId!),
-    enabled: !!queryId,
+    enabled: ready,
     retry: 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 }

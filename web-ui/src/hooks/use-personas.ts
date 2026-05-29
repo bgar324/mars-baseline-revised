@@ -15,28 +15,27 @@ async function fetchPersonas(queryId: string): Promise<PersonaAgent[]> {
 
 export function usePersonas() {
   const queryId = useAgentBuilderStore((s) => s.queryId)
-
-  const q = useQuery({
-    queryKey: ["personas", queryId],
-    queryFn: () => fetchPersonas(queryId!),
-    enabled: !!queryId,
-    retry: 0,
-  })
-
-  console.log(
-    "[personas] queryId=",
-    queryId,
-    "status=",
-    q.status,
-    "fetching=",
-    q.isFetching,
-    "data?",
-    !!q.data,
-    "len=",
-    q.data?.length,
-    "error=",
-    q.error,
+  const personaStage = useAgentBuilderStore(
+    (s) => s.pipelineStages.persona,
   )
+  const cached = useAgentBuilderStore((s) => s.personas)
+  const personasSet = useAgentBuilderStore((s) => s.personasSet)
+  const ready = !!queryId && personaStage === "complete"
 
-  return q
+  return useQuery({
+    queryKey: ["personas", queryId],
+    queryFn: async () => {
+      const data = await fetchPersonas(queryId!)
+      personasSet(data)
+      return data
+    },
+    enabled: ready,
+    retry: 0,
+    initialData: cached.length > 0 ? cached : undefined,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
 }
