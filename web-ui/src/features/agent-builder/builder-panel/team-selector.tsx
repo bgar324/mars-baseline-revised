@@ -204,17 +204,7 @@ export function TeamSelector() {
           if (!next) setPending(null)
         }}
       >
-        <AlertDialogContent
-          className="h-fit!"
-          style={{
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            margin: "auto",
-            transform: "none",
-          }}
-        >
+        <AlertDialogContent className="h-fit!">
           <AlertDialogHeader>
             <AlertDialogTitle className="tracking-normal">
               Restart the team?

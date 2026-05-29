@@ -151,6 +151,20 @@ function ClaimBlock({
     [content],
   )
 
+  useEffect(() => {
+    if (!editor) return
+    const container = editor.view.dom.closest<HTMLElement>(
+      '[data-slot="base-panel-body"]',
+    )
+    if (!container) return
+    const onScroll = () => {
+      const { from, empty } = editor.state.selection
+      if (!empty) editor.commands.setTextSelection(from)
+    }
+    container.addEventListener("scroll", onScroll, { passive: true })
+    return () => container.removeEventListener("scroll", onScroll)
+  }, [editor])
+
   if (!proposal) {
     return (
       <div className="flex flex-col gap-1.5">

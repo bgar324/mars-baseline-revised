@@ -106,6 +106,7 @@ export const DebateEventSchema = z.object({
 })
 
 export type SteerType = z.infer<typeof SteerTypeSchema>
+export type TurnType = z.infer<typeof TurnTypeSchema>
 export type Steer = z.infer<typeof SteerSchema>
 export type AgentTurn = z.infer<typeof AgentTurnSchema>
 export type Cycle = z.infer<typeof CycleSchema>

@@ -2,7 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query"
 
-import { fetcher } from "@/lib/api/client"
+import { useChainStore } from "@/features/hypo-canvas/chain-store"
+import { useDebateStore } from "@/features/hypo-canvas/debate-store"
+import { fetcher, isStaleQueryError } from "@/lib/api/client"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import { PersonaAgentListSchema, type PersonaAgent } from "@/types/persona"
 
@@ -25,9 +27,18 @@ export function usePersonas() {
   return useQuery({
     queryKey: ["personas", queryId],
     queryFn: async () => {
-      const data = await fetchPersonas(queryId!)
-      personasSet(data)
-      return data
+      try {
+        const data = await fetchPersonas(queryId!)
+        personasSet(data)
+        return data
+      } catch (error) {
+        if (isStaleQueryError(error)) {
+          useChainStore.getState().reset()
+          useDebateStore.getState().reset()
+          useAgentBuilderStore.getState().researchProblemCleared()
+        }
+        throw error
+      }
     },
     enabled: ready,
     retry: 0,

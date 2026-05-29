@@ -1,27 +1,35 @@
 "use client"
 
-import { useMemo } from "react"
-import { LoaderCircle } from "lucide-react"
+import { Fragment, useMemo } from "react"
+import { Lightbulb, Reply, Sparkles } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 import { InlineCitation } from "@/components/common/inline-citation"
 import { StreamingMarkdown } from "@/components/common/streaming-markdown"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Checkpoint } from "@/components/ui/checkpoint"
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { TextShimmer } from "@/components/ui/text-shimmer"
+import { ThinkingBar } from "@/components/ui/thinking-bar"
 import { usePapers } from "@/hooks/use-papers"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import type { Paper } from "@/types/paper"
 import type { PersonaAgent } from "@/types/persona"
-import type { AgentTurn, DebateEvent } from "@/types/debate"
+import type { AgentTurn, TurnType } from "@/types/debate"
 import { initials } from "@/utils/avatar"
 import { humanizeEnum } from "@/utils/format"
 
-import { useCycleTurns, useDebateStore } from "./debate-store"
+import { useCycleTurns } from "./debate-store"
+
+const PHASE_ICON: Record<TurnType, LucideIcon> = {
+  propose: Lightbulb,
+  respond: Reply,
+  refine: Sparkles,
+}
 
 const LABEL =
   "font-mono text-xs uppercase tracking-wide text-muted-foreground"
@@ -32,7 +40,6 @@ const TAB_TRIGGER =
 export function DebatePanel({ canvasCycleId }: { canvasCycleId: string }) {
   const cycle = useCycleTurns(canvasCycleId)
   const team = useAgentBuilderStore((s) => s.team)
-  const eventLog = useDebateStore((s) => s.eventLog)
   const n = Number(canvasCycleId.slice(1))
   const turns = cycle?.turns ?? []
   const isRunning = !cycle || cycle.status === "running"
@@ -63,12 +70,7 @@ export function DebatePanel({ canvasCycleId }: { canvasCycleId: string }) {
           value="conversation"
           className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-4"
         >
-          <Conversation
-            turns={turns}
-            isRunning={isRunning}
-            team={team}
-            eventLog={eventLog}
-          />
+          <Conversation turns={turns} isRunning={isRunning} team={team} />
         </TabsContent>
         <TabsContent
           value="synthesis"
@@ -85,17 +87,16 @@ function Conversation({
   turns,
   isRunning,
   team,
-  eventLog,
 }: {
   turns: AgentTurn[]
   isRunning: boolean
   team: PersonaAgent[]
-  eventLog: DebateEvent[]
 }) {
   const personasById = useMemo(
     () => new Map(team.map((p) => [String(p.cluster_id), p])),
     [team],
   )
+  const mentionNames = useMemo(() => team.map((p) => p.name), [team])
 
   if (turns.length === 0 && !isRunning) {
     return (
@@ -104,32 +105,42 @@ function Conversation({
   }
 
   const lastIdx = turns.length - 1
+  const activePersona = turns.length > 0
+    ? personasById.get(turns[lastIdx].agent_id)
+    : undefined
+  const thinkingText = activePersona
+    ? `${activePersona.name} is thinking…`
+    : "Agents are thinking…"
 
   return (
     <div className="flex flex-col">
-      {isRunning && eventLog.length > 0 && (
-        <div className="mb-3 rounded-md border bg-muted/40 px-3 py-2">
-          <EventLog events={eventLog} team={team} />
+      {isRunning && (
+        <div className="sticky top-0 z-10 -mx-4 mb-1 border-b bg-background px-4 pb-3">
+          <ThinkingBar text={thinkingText} />
         </div>
       )}
-      <div className="flex flex-col divide-y">
-        {turns.map((turn, idx) => (
-          <TurnRow
-            key={turn.turn_id}
-            turn={turn}
-            index={idx + 1}
-            isStreaming={isRunning && idx === lastIdx}
-            persona={personasById.get(turn.agent_id)}
-          />
-        ))}
-        {isRunning && (
-          <div className="flex items-center gap-2 py-3">
-            <LoaderCircle className="size-4 animate-spin text-foreground" />
-            <TextShimmer className="text-s">
-              Running debate cycle…
-            </TextShimmer>
-          </div>
-        )}
+      <div className="flex flex-col">
+        {turns.map((turn, idx) => {
+          const prev = idx > 0 ? turns[idx - 1] : null
+          const showCheckpoint = !prev || prev.turn_type !== turn.turn_type
+          return (
+            <Fragment key={turn.turn_id}>
+              {showCheckpoint && (
+                <Checkpoint
+                  icon={PHASE_ICON[turn.turn_type]}
+                  label={turn.turn_type}
+                  className={idx === 0 ? "pb-5" : "py-5"}
+                />
+              )}
+              <TurnRow
+                turn={turn}
+                isStreaming={isRunning && idx === lastIdx}
+                persona={personasById.get(turn.agent_id)}
+                mentionNames={mentionNames}
+              />
+            </Fragment>
+          )
+        })}
       </div>
     </div>
   )
@@ -137,14 +148,14 @@ function Conversation({
 
 function TurnRow({
   turn,
-  index,
   isStreaming,
   persona,
+  mentionNames,
 }: {
   turn: AgentTurn
-  index: number
   isStreaming: boolean
   persona: PersonaAgent | undefined
+  mentionNames: string[]
 }) {
   const { data: papers } = usePapers()
   const papersById = useMemo(() => {
@@ -153,24 +164,27 @@ function TurnRow({
     return map
   }, [papers])
   return (
-    <div className="flex gap-3 py-3 animate-in fade-in-0 duration-300">
-      <Avatar className="mt-0.5 size-8 shrink-0">
-        <AvatarFallback className="bg-muted text-[11px] text-muted-foreground">
+    <div className="flex gap-2.5 py-3 animate-in fade-in-0 duration-300">
+      <Avatar className="mt-0.5 size-5 shrink-0">
+        <AvatarFallback className="bg-muted pt-px text-[9px] leading-none text-muted-foreground">
           {initials(persona?.name ?? "??")}
         </AvatarFallback>
       </Avatar>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex items-baseline gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <span className="text-s font-medium">
             {persona?.name ?? "Unknown agent"}
           </span>
-          <span className="font-mono text-[10px] uppercase text-muted-foreground">
-            turn {index} · {humanizeEnum(turn.turn_type)}
-          </span>
+          {turn.response_action && (
+            <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+              {humanizeEnum(turn.response_action)}
+            </span>
+          )}
         </div>
         <StreamingMarkdown
           text={turn.message}
           isStreaming={isStreaming}
+          mentions={mentionNames}
           className="text-s leading-relaxed text-muted-foreground [&_p]:my-1 [&_p]:text-s [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
         />
         {turn.evidence && turn.evidence.length > 0 && (
@@ -244,49 +258,4 @@ function Group({ title, items }: { title: string; items: string[] }) {
   )
 }
 
-function EventLog({
-  events,
-  team,
-}: {
-  events: DebateEvent[]
-  team: PersonaAgent[]
-}) {
-  return (
-    <ul className="flex flex-col gap-1 font-mono text-xs text-muted-foreground">
-      {events.slice(-6).map((event, i) => (
-        <li key={i} className="flex items-center gap-2">
-          <span className="inline-block size-1.5 rounded-full bg-foreground/60" />
-          <span>{event.event}</span>
-          <EventDetail event={event} team={team} />
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-function EventDetail({
-  event,
-  team,
-}: {
-  event: DebateEvent
-  team: PersonaAgent[]
-}) {
-  const agentId = (event.payload?.agent_id ?? null) as string | null
-  const turnType = (event.payload?.turn_type ?? null) as string | null
-  const persona =
-    agentId != null
-      ? team.find((p) => String(p.cluster_id) === agentId)
-      : undefined
-  if (event.event === "turn.produced" && persona && turnType) {
-    return (
-      <span>
-        · {persona.name} · {turnType}
-      </span>
-    )
-  }
-  if (event.event === "stance.updated" && persona) {
-    return <span>· {persona.name}</span>
-  }
-  return null
-}
 

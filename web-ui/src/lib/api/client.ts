@@ -10,6 +10,10 @@ export class ApiError extends Error {
   }
 }
 
+export function isStaleQueryError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404
+}
+
 export async function fetcher<T>(
   path: string,
   schema: ZodType<T>,

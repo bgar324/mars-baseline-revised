@@ -32,9 +32,9 @@ import {
 import { useSelectionStore } from "@/features/hypo-canvas/selection-store"
 import { SteerPanel } from "@/features/hypo-canvas/steer-panel"
 
-const SIDE_DEFAULT = "25%"
-const SIDE_MIN = "20%"
-const CENTER_DEFAULT = "50%"
+const SIDE_DEFAULT = "30%"
+const SIDE_MIN = "22%"
+const CENTER_DEFAULT = "40%"
 const CENTER_MIN = "30%"
 
 const HANDLE_CLASS =
@@ -64,17 +64,7 @@ export default function CanvasPage() {
                 Reset
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent
-              className="h-fit!"
-              style={{
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                margin: "auto",
-                transform: "none",
-              }}
-            >
+            <AlertDialogContent className="h-fit!">
               <AlertDialogHeader>
                 <AlertDialogTitle className="tracking-normal">
                   Discard this session?
