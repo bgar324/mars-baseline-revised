@@ -132,6 +132,19 @@ End by naming a remaining disagreement, not by summarizing or reconciling positi
 """
 
 
+STEERING_BLOCK = """# STEERING
+
+- Emphasize: lead your claim with this; explain its mechanism, do not just name it.
+- Reframe: replace your default angle with this; do not keep both.
+
+Emphasize:
+{emphasize}
+
+Reframe:
+{reframe}
+"""
+
+
 REFLECT_PROMPT = """# CYCLE COMPLETED
 
 Focal claim: {focal_claim}

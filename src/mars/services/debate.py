@@ -22,6 +22,7 @@ from mars.models.debate import (
     Debate,
     DebateDecision,
     Stance,
+    Steer,
     TurnType,
 )
 from mars.models.persona import PersonaAgent as PersonaModel
@@ -209,6 +210,59 @@ class DebateService:
 
         raise StateError(f"unknown action {decision.action}")
 
+    async def set_steers(
+        self, *, debate_id: str, cycle_id: str, steers: list[Steer]
+    ) -> Cycle:
+        debate = self._require_debate(debate_id)
+        cycle = debate.cycles.get(cycle_id)
+        if cycle is None:
+            raise NotFoundError(f"cycle {cycle_id} not found")
+        if cycle.status not in {"pending", "awaiting"}:
+            raise StateError(
+                f"cycle {cycle_id} is {cycle.status}; cannot set steers"
+            )
+        cycle.steers = steers
+        cycle.updated_at = _now()
+        return cycle
+
+    async def propose(
+        self,
+        *,
+        debate_id: str,
+        cycle_id: str,
+        agent_id: str,
+        steers: list[Steer] | None = None,
+    ) -> AgentTurn:
+        debate = self._require_debate(debate_id)
+        cycle = debate.cycles.get(cycle_id)
+        if cycle is None:
+            raise NotFoundError(f"cycle {cycle_id} not found")
+        if agent_id not in cycle.agent_ids:
+            raise NotFoundError(f"agent {agent_id} not in cycle {cycle_id}")
+        persona = next(
+            (a for a in debate.agents if str(a.cluster_id) == agent_id), None
+        )
+        if persona is None:
+            raise NotFoundError(f"agent {agent_id} not in debate {debate_id}")
+
+        others = [
+            a
+            for a in debate.agents
+            if str(a.cluster_id) in cycle.agent_ids and str(a.cluster_id) != agent_id
+        ]
+        evidence = await self._retrieve(debate_id, agent_id, cycle.focal_claim)
+        return await self._persona_agent.produce(
+            persona=persona,
+            cycle=cycle,
+            others=others,
+            prior_turns=[],
+            turn_type="propose",
+            evidence=evidence,
+            recap=None,
+            cache_name=None,
+            steers=steers or [],
+        )
+
     def get_debate(self, debate_id: str) -> Debate:
         return self._require_debate(debate_id)
 
@@ -309,11 +363,13 @@ class DebateService:
             evidence=evidence,
             recap=recap,
             cache_name=cache_name,
+            steers=cycle.steers,
         )
         await self._emit(
             debate_id,
             DebateEventType.TURN_PRODUCED,
             cycle_id=cycle.cycle_id,
+            turn=turn.model_dump(mode="json"),
             turn_id=turn.turn_id,
             agent_id=turn.agent_id,
             turn_type=turn_type,

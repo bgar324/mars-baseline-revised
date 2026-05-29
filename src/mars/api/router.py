@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from mars.api.dependencies import get_debate_service, get_pipeline
-from mars.models.debate import Cycle, Debate, DebateDecision
+from mars.models.debate import AgentTurn, Cycle, Debate, DebateDecision, Steer
 from mars.models.persona import PersonaAgent
 from mars.models.s2 import Paper
-from mars.schemas.debate import DebateRequest
+from mars.schemas.debate import DebateRequest, ProposeRequest
 from mars.schemas.event import (
     ClusterAssignment,
     ClusterGroup,
@@ -15,6 +15,7 @@ from mars.schemas.event import (
     QueryRequest,
     StageName,
 )
+from mars.schemas.query import ClaimUpdate
 from mars.services.debate import (
     DebateError,
     DebateService,
@@ -132,6 +133,20 @@ async def get_personas(
     return _artifact(query_id, StageName.PERSONA, pipeline)
 
 
+@query_router.put("/{query_id}/claim")
+async def update_claim(
+    query_id: str,
+    update: ClaimUpdate,
+    pipeline: PipelineService = Depends(get_pipeline),
+) -> PipelineState:
+    try:
+        return pipeline.update_claim(query_id, update.claim)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PrerequisiteError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 debate_router = APIRouter(prefix="/api/v1/debates", tags=["debates"])
 
 
@@ -144,12 +159,21 @@ def _http_error(exc: DebateError) -> HTTPException:
 async def create_debate(
     request: DebateRequest,
     service: DebateService = Depends(get_debate_service),
+    pipeline: PipelineService = Depends(get_pipeline),
 ) -> Debate:
     """Create a debate with its root cycle and start the event stream."""
+    cluster_papers = request.cluster_papers
+    if not cluster_papers and request.query_id is not None:
+        clusters: dict[int, list[Paper]] = _artifact(
+            request.query_id, StageName.CLUSTER, pipeline
+        )
+        cluster_papers = {
+            str(cid): papers for cid, papers in clusters.items() if cid != -1
+        }
     return await service.start(
         focal_claim=request.focal_claim,
         agents=request.agents,
-        cluster_papers=request.cluster_papers,
+        cluster_papers=cluster_papers,
     )
 
 
@@ -188,6 +212,24 @@ async def run_cycle(
         raise _http_error(exc) from exc
 
 
+@debate_router.post("/{debate_id}/cycles/{cycle_id}/propose")
+async def propose_turn(
+    debate_id: str,
+    cycle_id: str,
+    request: ProposeRequest,
+    service: DebateService = Depends(get_debate_service),
+) -> AgentTurn:
+    try:
+        return await service.propose(
+            debate_id=debate_id,
+            cycle_id=cycle_id,
+            agent_id=request.agent_id,
+            steers=request.steers,
+        )
+    except DebateError as exc:
+        raise _http_error(exc) from exc
+
+
 @debate_router.post("/{debate_id}/steer")
 async def steer_debate(
     debate_id: str,
@@ -196,6 +238,21 @@ async def steer_debate(
 ) -> Cycle | None:
     try:
         return await service.steer(debate_id=debate_id, decision=decision)
+    except DebateError as exc:
+        raise _http_error(exc) from exc
+
+
+@debate_router.put("/{debate_id}/cycles/{cycle_id}/steers")
+async def set_cycle_steers(
+    debate_id: str,
+    cycle_id: str,
+    steers: list[Steer],
+    service: DebateService = Depends(get_debate_service),
+) -> Cycle:
+    try:
+        return await service.set_steers(
+            debate_id=debate_id, cycle_id=cycle_id, steers=steers
+        )
     except DebateError as exc:
         raise _http_error(exc) from exc
 

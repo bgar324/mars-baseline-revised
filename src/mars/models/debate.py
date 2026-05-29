@@ -12,6 +12,7 @@ ResponseAction = Literal["challenge", "support", "concede"]
 DebateAction = Literal["accept", "branch", "close"]
 Outcome = Literal["question", "disagreement", "assumption"]
 CycleStatus = Literal["pending", "running", "awaiting", "complete"]
+SteerType = Literal["emphasize", "reframe"]
 
 
 def _utcnow() -> datetime:
@@ -21,6 +22,13 @@ def _utcnow() -> datetime:
 class Citation(BaseModel):
     paper_id: str
     span: str | None = None
+
+
+class Steer(BaseModel):
+    type: SteerType
+    text: str
+    agent_id: str
+    cycle_id: str
 
 
 class AgentTurn(BaseModel):
@@ -103,6 +111,7 @@ class Cycle(BaseModel):
     turns: list[AgentTurn] = Field(default_factory=list)
     synthesis: DebateSynthesis | None = None
     status: CycleStatus = "pending"
+    steers: list[Steer] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 

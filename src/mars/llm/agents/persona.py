@@ -2,13 +2,21 @@ from mars.llm.prompts.persona import (
     ACTION_PROMPT,
     DEBATE_CONTEXT,
     REFLECT_PROMPT,
+    STEERING_BLOCK,
     SYSTEM_PROMPT,
     TURN_PROMPT,
     format_constraints,
     format_list,
 )
 from mars.llm.providers.base import LLMProvider
-from mars.models.debate import AgentTurn, AgentTurnInput, Cycle, Stance, TurnType
+from mars.models.debate import (
+    AgentTurn,
+    AgentTurnInput,
+    Cycle,
+    Stance,
+    Steer,
+    TurnType,
+)
 from mars.models.persona import PersonaAgent as PersonaModel
 from mars.models.s2 import Paper
 
@@ -90,6 +98,18 @@ def build_turn_prompt(
     return TURN_PROMPT.format(turns=render_turns(turns, names), turn_type=turn_type)
 
 
+def build_steering_block(steers: list[Steer] | None, agent_id: str) -> str:
+    if not steers:
+        return ""
+    own = [s for s in steers if s.agent_id == agent_id]
+    if not own:
+        return ""
+    return STEERING_BLOCK.format(
+        emphasize=format_list([s.text for s in own if s.type == "emphasize"]),
+        reframe=format_list([s.text for s in own if s.type == "reframe"]),
+    )
+
+
 def build_reflect_prompt(
     persona: PersonaModel,
     cycle: Cycle,
@@ -128,11 +148,16 @@ class PersonaTurnAgent:
         evidence: list[Paper],
         recap: str | None = None,
         cache_name: str | None = None,
+        steers: list[Steer] | None = None,
     ) -> AgentTurn:
         names = {str(p.cluster_id): p.name for p in (persona, *others)}
         user = build_turn_prompt(prior_turns, turn_type, names)
         if turn_type == "respond":
             user += "\n\n" + ACTION_PROMPT
+
+        steering = build_steering_block(steers, str(persona.cluster_id))
+        if steering:
+            user = steering + "\n\n" + user
 
         if cache_name:
             messages = [{"role": "user", "content": user}]
@@ -188,6 +213,7 @@ class PersonaTurnAgent:
             schema=Stance,
             cache_name=cache_name,
             temperature=REFLECT_TEMP,
+            thinking_disabled=True,
         )
         stance = result.parsed
         stance.cycle_id = cycle.cycle_id
