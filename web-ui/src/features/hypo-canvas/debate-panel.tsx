@@ -116,8 +116,8 @@ function Conversation({
   }
 
   const lastIdx = turns.length - 1
-  const activePersona =
-    turns.length > 0 ? personasById.get(turns[lastIdx].agent_id) : undefined
+  const synthesizing =
+    turns.length > 0 && turns[lastIdx].turn_type === "refine"
 
   return (
     <div className="flex flex-col">
@@ -143,16 +143,10 @@ function Conversation({
         )
       })}
       {isRunning && (
-        <div className="flex items-center gap-2.5 py-3">
-          {activePersona && (
-            <AgentAvatar
-              clusterId={activePersona.cluster_id}
-              name={activePersona.name}
-              className="size-5 shrink-0"
-              fallbackClassName="pt-px text-[9px] leading-none"
-            />
-          )}
-          <TextShimmer className="text-s">Thinking…</TextShimmer>
+        <div className="py-3">
+          <TextShimmer className="text-s">
+            {synthesizing ? "Synthesizing…" : "Thinking…"}
+          </TextShimmer>
         </div>
       )}
     </div>
