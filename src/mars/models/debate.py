@@ -14,7 +14,7 @@ Outcome = Literal["question", "disagreement", "assumption"]
 CycleStatus = Literal["pending", "running", "awaiting", "complete"]
 SteerType = Literal["emphasize", "reframe"]
 
-SynthesisItem = Annotated[str, StringConstraints(max_length=160)]
+SynthesisItem = Annotated[str, StringConstraints(max_length=400)]
 
 
 def _utcnow() -> datetime:
@@ -62,7 +62,7 @@ class AgentTurnInput(BaseModel):
     evidence: list[Citation] = Field(default_factory=list, max_length=4)
     message: str = Field(
         description="Your spoken turn — 1-2 short sentences in plain language.",
-        max_length=350,
+        max_length=600,
     )
 
 
@@ -94,7 +94,7 @@ class DebateSynthesis(BaseModel):
 
 class Stance(BaseModel):
     summary: str = Field(
-        description="Your position now, one or two short sentences.", max_length=300
+        description="Your position now, one or two short sentences.", max_length=500
     )
     claims: list[str] = Field(default_factory=list, max_length=6)
     premises: list[str] = Field(default_factory=list, max_length=6)
