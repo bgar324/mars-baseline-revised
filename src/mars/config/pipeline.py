@@ -125,14 +125,42 @@ class HDBSCANConfig(BaseModel):
     method: str = "leaf"
 
 
+class KNNConfig(BaseModel):
+    k: int = Field(default=15, ge=2, le=200)
+    symmetrize_mode: str = "max"
+
+
+class LeidenConfig(BaseModel):
+    resolution: float = Field(default=1.0, gt=0.0)
+    n_iterations: int = -1
+    seed: int | None = 42
+    use_weights: bool = True
+    mcs: int = Field(
+        default=15,
+        ge=2,
+        description=(
+            "Minimum papers per surviving cluster. Smaller communities are merged "
+            "into their nearest surviving community."
+        ),
+    )
+
+
 class Normalization(str, Enum):
     L2 = "l2"
     CENTER_L2 = "center_l2"
 
 
+class ClusterAlgorithm(str, Enum):
+    HDBSCAN = "hdbscan"
+    LEIDEN = "leiden"
+
+
 class ClusterConfig(BaseModel):
+    algorithm: ClusterAlgorithm = ClusterAlgorithm.LEIDEN
     umap: UMAPConfig = Field(default_factory=UMAPConfig)
     hdbscan: HDBSCANConfig = Field(default_factory=HDBSCANConfig)
+    knn: KNNConfig = Field(default_factory=KNNConfig)
+    leiden: LeidenConfig = Field(default_factory=LeidenConfig)
     normalization: Normalization = Normalization.L2
 
 

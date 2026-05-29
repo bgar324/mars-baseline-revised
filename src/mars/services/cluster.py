@@ -1,9 +1,18 @@
+from collections import Counter
+
 import hdbscan
 import numpy as np
-import umap
 
-from mars.config.pipeline import ClusterConfig, Normalization, resolve_mcs
+from mars.config.pipeline import (
+    ClusterAlgorithm,
+    ClusterConfig,
+    Normalization,
+    resolve_mcs,
+)
 from mars.models.s2 import Paper
+from mars.pipeline.cluster.knn import build_knn
+from mars.pipeline.cluster.leiden import leiden_partition
+from mars.pipeline.cluster.umap import reduce
 
 
 class ClusterService:
@@ -20,10 +29,11 @@ def cluster_papers(
     papers: list[Paper],
     config: ClusterConfig | None = None,
 ) -> dict[int, list[Paper]]:
-    """Cluster papers into epistemic communities via UMAP + HDBSCAN.
+    """Cluster papers into epistemic communities via UMAP + HDBSCAN or Leiden.
 
-    Returns a mapping of cluster id to papers. Key -1 is the HDBSCAN noise
-    cluster. Papers without a SPECTER2 embedding are dropped.
+    Returns a mapping of cluster id to papers. Key -1 is the noise cluster
+    (HDBSCAN only; Leiden assigns every paper). Papers without a SPECTER2
+    embedding are dropped.
     """
     cfg = config or ClusterConfig()
 
@@ -34,28 +44,84 @@ def cluster_papers(
     embeddings = np.array([p.specter_v2 for p in embedded], dtype=np.float32)
     embeddings = normalize_embeddings(embeddings, cfg.normalization)
 
-    projection = umap.UMAP(
+    projection = reduce(
+        embeddings,
         n_neighbors=cfg.umap.n_neighbors,
         n_components=cfg.umap.n_components,
         min_dist=cfg.umap.min_dist,
         metric=cfg.umap.metric,
         random_state=cfg.umap.random_state,
-        init="random",
-        n_jobs=-1,
-    ).fit_transform(embeddings)
+    )
 
-    mcs = resolve_mcs(cfg.hdbscan, len(embedded))
-    labels = hdbscan.HDBSCAN(
+    if cfg.algorithm is ClusterAlgorithm.LEIDEN:
+        labels = cluster_leiden(projection, cfg)
+    else:
+        labels = cluster_hdbscan(projection, cfg, len(embedded))
+
+    clusters: dict[int, list[Paper]] = {}
+    for paper, label in zip(embedded, labels):
+        clusters.setdefault(int(label), []).append(paper)
+    return clusters
+
+
+def cluster_hdbscan(
+    projection: np.ndarray, cfg: ClusterConfig, n_papers: int
+) -> np.ndarray:
+    """Density-cluster the projection with HDBSCAN; label -1 is noise."""
+    mcs = resolve_mcs(cfg.hdbscan, n_papers)
+    return hdbscan.HDBSCAN(
         min_cluster_size=mcs,
         min_samples=cfg.hdbscan.min_samples,
         metric=cfg.hdbscan.metric,
         cluster_selection_method=cfg.hdbscan.method,
     ).fit_predict(projection)
 
-    clusters: dict[int, list[Paper]] = {}
-    for paper, label in zip(embedded, labels):
-        clusters.setdefault(int(label), []).append(paper)
-    return clusters
+
+def cluster_leiden(projection: np.ndarray, cfg: ClusterConfig) -> np.ndarray:
+    """Community-detect the projection via a kNN graph and Leiden.
+
+    Every paper is assigned a community; communities smaller than the
+    configured minimum are merged into their nearest surviving community.
+    """
+    k = min(cfg.knn.k, int(projection.shape[0]) - 1)
+    adjacency = build_knn(projection, k=k, symmetrize_mode=cfg.knn.symmetrize_mode)
+    membership = leiden_partition(
+        adjacency,
+        resolution=cfg.leiden.resolution,
+        n_iterations=cfg.leiden.n_iterations,
+        seed=cfg.leiden.seed,
+        use_weights=cfg.leiden.use_weights,
+    )
+    return enforce_min_cluster_size(membership, projection, cfg.leiden.mcs)
+
+
+def enforce_min_cluster_size(
+    labels: np.ndarray, coords: np.ndarray, mcs: int
+) -> np.ndarray:
+    """Merge undersized communities into their nearest surviving centroid."""
+    labels = labels.copy()
+    counts = Counter(labels.tolist())
+    large = [c for c, n in counts.items() if n >= mcs]
+    small = [c for c, n in counts.items() if n < mcs]
+    if not large or not small:
+        return relabel_contiguous(labels)
+
+    centroids = np.array([coords[labels == c].mean(axis=0) for c in large])
+    for i in np.where(np.isin(labels, small))[0]:
+        nearest = int(np.linalg.norm(centroids - coords[i], axis=1).argmin())
+        labels[i] = large[nearest]
+    return relabel_contiguous(labels)
+
+
+def relabel_contiguous(labels: np.ndarray) -> np.ndarray:
+    """Remap cluster ids to a contiguous range starting at 0."""
+    out = labels.copy()
+    remap: dict[int, int] = {}
+    for old in sorted(set(labels.tolist())):
+        remap[old] = len(remap)
+    for old, new in remap.items():
+        out[labels == old] = new
+    return out
 
 
 def l2_normalize(matrix: np.ndarray) -> np.ndarray:
