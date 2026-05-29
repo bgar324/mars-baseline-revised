@@ -34,7 +34,13 @@ class PersonaSynthesis(BaseModel):
             "and statistical methods belong here only. Reason here first."
         )
     )
-    name: str = Field(description="Broadest accurate field label, 2-4 words")
+    name: str = Field(
+        description=(
+            "Format '{Field} · {Facet}': discipline label, a middle dot, then the "
+            "cluster's distinguishing facet (method/lens/scale/subfocus). "
+            "E.g. 'Social Epidemiologist · Life-Course'."
+        )
+    )
     framing: str = Field(
         description="One sentence on how this community frames the focal claim"
     )
@@ -52,7 +58,9 @@ class PersonaSynthesis(BaseModel):
 
 class PersonaAgent(BaseModel):
     cluster_id: int
-    name: str = Field(description="Archetypal 2-4 word label")
+    name: str = Field(
+        description="'{Field} · {Facet}' label, e.g. 'Social Epidemiologist · Life-Course'"
+    )
     framing: str = Field(
         description="One sentence on how this cluster frames the focal claim"
     )

@@ -54,8 +54,8 @@ class HypotheticalQuestions(BaseModel):
         description="Paper-title-style or abstract-style questions "
         "synthesized from the query's constructs and claim, used as "
         "additional retrieval anchors",
-        min_length=3,
-        max_length=5,
+        min_length=6,
+        max_length=8,
     )
 
 

@@ -101,6 +101,31 @@ class RetrievalConfig(BaseModel):
         default_factory=lambda: list(PublicationType)
     )
     min_citation_count: int = Field(default=1, ge=1)
+    target_corpus_size: int = Field(
+        default=150,
+        ge=1,
+        description=(
+            "Expand via recommendations until at least this many distinct papers "
+            "are retrieved, so clustering has enough material for diverse personas."
+        ),
+    )
+    expansion_rounds: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Max recommendation-based expansion rounds when below "
+            "target_corpus_size. Default 0: breadth comes from diverse "
+            "hypothetical-question anchors, not citation recommendations."
+        ),
+    )
+    expansion_seed_size: int = Field(
+        default=40,
+        ge=1,
+        description="Top-cited papers used to seed each expansion round.",
+    )
+    expansion_limit: int = Field(
+        default=100, ge=1, description="Papers requested per recommendation round."
+    )
 
 
 class UMAPConfig(BaseModel):

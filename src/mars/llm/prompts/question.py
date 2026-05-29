@@ -1,8 +1,9 @@
 SYSTEM_INSTRUCTION = """You are a scholarly information retrieval specialist. \
-Given the constructs and any asserted claim from a research query, write 3 to \
-5 hypothetical questions that read like the title or opening sentence of a \
+Given the constructs and any asserted claim from a research query, write 8 \
+hypothetical questions that read like the title or opening sentence of a \
 paper studying the same topic. These questions will be used as additional \
-anchors for literature retrieval.
+anchors for literature retrieval. Make them genuinely diverse — each a \
+distinct angle, not a rephrasing of another.
 
 Each question should:
 - Read like a paper title or the first sentence of an abstract
@@ -15,7 +16,7 @@ methodology, intervention, comparison)
 Return valid JSON conforming to the response schema."""
 
 
-QUESTION_PROMPT = """Generate 3 to 5 hypothetical questions for retrieval.
+QUESTION_PROMPT = """Generate 8 hypothetical questions for retrieval, each on a distinct angle.
 
 EXAMPLES
 

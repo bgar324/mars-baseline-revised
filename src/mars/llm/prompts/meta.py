@@ -9,7 +9,7 @@ methods_summary is a private scratchpad. Here, and ONLY here, you may name speci
 Specific dataset names (e.g. ELSA, KNHANES), named indices or frameworks (e.g. Area Deprivation Index, allostatic load, Oaxaca-Blinder decomposition), and specific statistical techniques stay in methods_summary ONLY. The name, framing, background, and instructions must be field-level and contain none of them.
 
 # THEN SYNTHESIZE (the identity — must survive +5 typical papers)
-- name: the broadest established field label that fits ALL papers (e.g. "Neuroimmunologist"). Hyphenated niche only if every paper shares it.
+- name: format as "{Field} · {Facet}" — the broadest accurate discipline label, a middle dot, then the cluster's single distinguishing facet (its method, lens, scale, or subfocus). Keep both parts short (whole name <= 6 words), e.g. "Social Epidemiologist · Life-Course". The facet is what sets this community apart from same-field neighbors; never put datasets or named indices in it.
 - framing: one sentence on how this community frames the focal claim; name the claim's key variables and at most one high-level methodological anchor (e.g. "longitudinal cohorts"). No paradigms, datasets, or parameterizations.
 - background: 1-3 sentences on the methodological tradition and evidence base at the FAMILY level (e.g. "longitudinal cohorts and rodent stress paradigms; neuroimaging, endocrine and immune markers"). Name families of designs and measures, never specific datasets or named indices.
 - reasoning_style: HOW this community produces evidence, not what it studies.
@@ -38,7 +38,7 @@ SAMPLE PAPERS:
 Output:
 {
   "methods_summary": "Preclinical rodent stress paradigms paired with human psychiatric cohorts; assays of DNA methylation and histone modifications in brain and peripheral immune tissue; mechanistic and biomarker designs.",
-  "name": "Molecular Psychiatrist",
+  "name": "Molecular Psychiatrist · Stress Epigenetics",
   "framing": "Stress shapes psychiatric outcomes through brain-anchored epigenetic regulation with detectable peripheral signatures.",
   "background": "Works across rodent stress models and clinical psychiatric cohorts, profiling stress-related neuroendocrine signaling, epigenetic regulation, and activity-dependent gene expression in brain-immune interactions.",
   "reasoning_style": "mechanistic",
@@ -67,7 +67,7 @@ SAMPLE PAPERS:
 Output:
 {
   "methods_summary": "Population and longitudinal cohort studies plus cross-national comparisons; survey and administrative data linking socioeconomic position to health outcomes and physiological wear; observational designs attentive to confounding and life-course timing.",
-  "name": "Social Epidemiologist",
+  "name": "Social Epidemiologist · Life-Course",
   "framing": "Socioeconomic inequality is a structural determinant that accumulates across the life course to shape population-level disease risk.",
   "background": "Draws on longitudinal cohorts and cross-national comparisons relating socioeconomic position to health outcomes and physiological burden across populations.",
   "reasoning_style": "observational",
@@ -102,7 +102,7 @@ WRONG (do NOT do this) — dataset/method jargon leaked into the identity:
 CORRECT — specifics confined to methods_summary; identity stays field-level:
 {
   "methods_summary": "National population health surveys (e.g. KNHANES, CGSS); cross-sectional and longitudinal designs; self-rated health and mortality outcomes; decomposition and concentration-index analyses of the socioeconomic-health gradient.",
-  "name": "Social Epidemiologist",
+  "name": "Social Epidemiologist · Health Gradient",
   "framing": "Socioeconomic position shapes population health through a gradient linking material and social disadvantage to outcomes.",
   "background": "Works with large population health surveys and longitudinal cohorts, relating income, education, and social position to self-rated health and mortality across populations.",
   "reasoning_style": "statistical",

@@ -18,6 +18,9 @@ from mars.schemas.query import (
 )
 
 
+QUESTION_TEMP = 0.4
+
+
 class QueryService:
     """Pipeline stage service for semantic role labeling, term expansion, hypothetical questions."""
 
@@ -37,19 +40,11 @@ class QueryService:
         claim = await self._synthesize_claim(query, spans)
         return ExtractedQuery(raw_text=query, spans=spans, claim=claim)
 
-    async def _synthesize_claim(
-        self, query: str, spans: list[QuerySpan]
-    ) -> str:
-        domain = next(
-            (s.text for s in spans if s.role == SemanticRole.DOMAIN), None
-        )
-        goal = next(
-            (s.text for s in spans if s.role == SemanticRole.GOAL), None
-        )
+    async def _synthesize_claim(self, query: str, spans: list[QuerySpan]) -> str:
+        domain = next((s.text for s in spans if s.role == SemanticRole.DOMAIN), None)
+        goal = next((s.text for s in spans if s.role == SemanticRole.GOAL), None)
         constructs = [s.text for s in spans if s.role == SemanticRole.CONSTRUCT]
-        raw_claim = next(
-            (s.text for s in spans if s.role == SemanticRole.CLAIM), None
-        )
+        raw_claim = next((s.text for s in spans if s.role == SemanticRole.CLAIM), None)
         prompt = build_claim_prompt(
             query=query,
             domain=domain,
@@ -105,6 +100,7 @@ class QueryService:
                     },
                 ],
                 schema=HypotheticalQuestions,
+                temperature=QUESTION_TEMP,
             )
         ).parsed
 

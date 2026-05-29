@@ -36,7 +36,7 @@ async def synthesize_personas(
     }
 
     agent = PersonaAgent(provider=provider)
-    return await asyncio.gather(
+    personas = await asyncio.gather(
         *(
             agent.run(
                 {
@@ -48,3 +48,20 @@ async def synthesize_personas(
             for cid, papers in eligible.items()
         )
     )
+    return ensure_distinct_names(list(personas))
+
+
+def ensure_distinct_names(personas: list[PersonaModel]) -> list[PersonaModel]:
+    """Break the rare tie when two personas land on the same name."""
+    seen: set[str] = set()
+    for persona in personas:
+        key = persona.name.strip().lower()
+        if key not in seen:
+            seen.add(key)
+            continue
+        ordinal = 2
+        while f"{persona.name} ({ordinal})".lower() in seen:
+            ordinal += 1
+        persona.name = f"{persona.name} ({ordinal})"
+        seen.add(persona.name.lower())
+    return personas

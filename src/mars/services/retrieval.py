@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Literal
 
 from mars.client.s2 import SemanticScholarClient
@@ -12,6 +13,7 @@ from mars.schemas.query import (
     SemanticRole,
 )
 
+logger = logging.getLogger(__name__)
 
 AnchorMode = Literal["search", "snippets"]
 
@@ -113,8 +115,13 @@ async def retrieve_candidates(
         tasks.append(
             retrieve_for_anchor(client, anchors.claim_query, config, mode="snippets")
         )
-    results = await asyncio.gather(*tasks)
-    flat = [p for sub in results for p in sub]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    flat: list[Paper] = []
+    for result in results:
+        if isinstance(result, Exception):
+            logger.warning("retrieval anchor failed, skipping: %s", result)
+            continue
+        flat.extend(result)
     snippet_corpus_ids = {
         p.corpus_id for p in flat if not p.id and p.corpus_id is not None
     }
@@ -124,6 +131,45 @@ async def retrieve_candidates(
         )
         flat = [p for p in flat if p.id] + hydrated
     return deduplicate(flat)[: config.retrieval_budget]
+
+
+async def expand_corpus(
+    client: SemanticScholarClient,
+    papers: list[Paper],
+    config: RetrievalConfig,
+) -> list[Paper]:
+    """Grow a thin candidate set with recommended neighbors until it hits the target size."""
+    corpus = deduplicate(papers)
+    if config.expansion_rounds <= 0 or len(corpus) >= config.target_corpus_size:
+        return corpus[: config.retrieval_budget]
+
+    seen_ids = {p.id for p in corpus if p.id}
+    for _ in range(config.expansion_rounds):
+        if len(corpus) >= config.target_corpus_size:
+            break
+        seeds = [
+            p.id
+            for p in sorted(corpus, key=lambda p: p.citation_count or 0, reverse=True)
+            if p.id
+        ][: config.expansion_seed_size]
+        if not seeds:
+            break
+        recommended = await client.recommendations(
+            positive_paper_ids=seeds, limit=config.expansion_limit
+        )
+        fresh = [
+            p
+            for p in recommended
+            if p.id
+            and p.id not in seen_ids
+            and (p.citation_count or 0) >= config.min_citation_count
+        ]
+        if not fresh:
+            break
+        seen_ids.update(p.id for p in fresh)
+        corpus = deduplicate(corpus + fresh)
+
+    return corpus[: config.retrieval_budget]
 
 
 async def retrieve_literature(
@@ -136,4 +182,5 @@ async def retrieve_literature(
     """Retrieve candidate papers from Query Expansion outputs."""
     cfg = config or RetrievalConfig()
     anchors = build_anchors(extracted, expansion, questions)
-    return await retrieve_candidates(client, anchors, cfg)
+    candidates = await retrieve_candidates(client, anchors, cfg)
+    return await expand_corpus(client, candidates, cfg)

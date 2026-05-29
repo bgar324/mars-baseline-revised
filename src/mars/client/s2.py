@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 import re
 from typing import Any
 
@@ -94,8 +95,6 @@ _PAGE_LIMIT = 1000
 _SEARCH_LIMIT = 100
 _BATCH_LIMIT = 500
 
-UNAUTHENTICATED_INTERVAL = 1.0
-
 
 class SemanticScholarError(Exception):
     """Raised when the Semantic Scholar API fails or rejects a request."""
@@ -110,9 +109,6 @@ class SemanticScholarClient(BaseClient):
             logger.warning(
                 "No Semantic Scholar API key; using the shared unauthenticated "
                 "rate pool. Set SEMANTIC_SCHOLAR_API_KEY to authenticate."
-            )
-            self._rate_limiter.min_interval = max(
-                self._rate_limiter.min_interval, UNAUTHENTICATED_INTERVAL
             )
 
     @classmethod
@@ -187,7 +183,7 @@ class SemanticScholarClient(BaseClient):
                     raise SemanticScholarError(
                         f"Request to {path} failed: {exc}"
                     ) from exc
-                await asyncio.sleep(backoff)
+                await asyncio.sleep(backoff + random.uniform(0.0, 0.5))
                 backoff *= 2
                 continue
 
@@ -198,7 +194,7 @@ class SemanticScholarClient(BaseClient):
                     raise SemanticScholarError(
                         f"{response.status_code} from {path} after retries"
                     )
-                delay = backoff
+                delay = backoff + random.uniform(0.0, 0.5)
                 retry_after = response.headers.get("Retry-After")
                 if retry_after is not None:
                     try:
@@ -417,11 +413,15 @@ class SemanticScholarClient(BaseClient):
         negative_paper_ids: list[str] | None = None,
         limit: int = 100,
     ) -> list[Paper]:
-        """Papers recommended from sets of liked and disliked seed papers."""
+        """Papers recommended from liked/disliked seeds, hydrated with full fields.
+
+        The recommendations endpoint rejects fields like tldr and the SPECTER2
+        embedding, so it returns ids only; batch_papers then hydrates them.
+        """
         data = await self._request(
             "POST",
             "/recommendations/v1/papers/",
-            params={"fields": _PAPER_FIELDS, "limit": limit},
+            params={"fields": "paperId", "limit": limit},
             json={
                 "positivePaperIds": [self._normalize_id(i) for i in positive_paper_ids],
                 "negativePaperIds": [
@@ -429,7 +429,14 @@ class SemanticScholarClient(BaseClient):
                 ],
             },
         )
-        return [self._parse_paper(p) for p in (data or {}).get("recommendedPapers", [])]
+        ids = [
+            rec.get("paperId")
+            for rec in (data or {}).get("recommendedPapers", [])
+            if rec.get("paperId")
+        ]
+        if not ids:
+            return []
+        return await self.batch_papers(ids)
 
     async def search_snippets(
         self, query: str, *, limit: int = 10, **filters: Any
