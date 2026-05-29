@@ -13,7 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { AgentAvatar } from "@/components/common/agent-avatar"
 import { Button } from "@/components/ui/button"
 import {
   Combobox,
@@ -39,7 +39,6 @@ import { useChainStore } from "@/features/hypo-canvas/chain-store"
 import { usePersonas } from "@/hooks/use-personas"
 import { TEAM_SIZE_MAX, useAgentBuilderStore } from "@/store/agent-builder"
 import type { PersonaAgent } from "@/types/persona"
-import { initials } from "@/utils/avatar"
 import { humanizeEnum } from "@/utils/format"
 
 const SECTION_LABEL =
@@ -144,11 +143,12 @@ export function TeamSelector() {
                         showRemove
                         className="bg-background rounded-full inline-flex h-auto max-w-full items-center gap-1 overflow-hidden border py-0.5 pl-1 shadow-xs **:data-[slot=combobox-chip-remove]:mr-0.5 **:data-[slot=combobox-chip-remove]:bg-transparent"
                       >
-                        <Avatar className="size-4 shrink-0">
-                          <AvatarFallback className="bg-muted pt-px text-[8px] leading-none text-muted-foreground">
-                            {initials(member.name)}
-                          </AvatarFallback>
-                        </Avatar>
+                        <AgentAvatar
+                          clusterId={member.cluster_id}
+                          name={member.name}
+                          className="size-4 shrink-0"
+                          fallbackClassName="pt-px text-[8px] leading-none"
+                        />
                         <span className="min-w-0 truncate">{member.name}</span>
                       </ComboboxChip>
                     ))}
@@ -176,11 +176,12 @@ export function TeamSelector() {
                 {(member: PersonaAgent) => (
                   <ComboboxItem key={member.cluster_id} value={member}>
                     <Item size="xs" className="flex-nowrap p-0">
-                      <Avatar className="size-6">
-                        <AvatarFallback className="bg-muted text-[10px] text-muted-foreground">
-                          {initials(member.name)}
-                        </AvatarFallback>
-                      </Avatar>
+                      <AgentAvatar
+                        clusterId={member.cluster_id}
+                        name={member.name}
+                        className="size-6"
+                        fallbackClassName="text-[10px]"
+                      />
                       <ItemContent className="min-w-0">
                         <ItemTitle className="truncate text-s font-medium">
                           {member.name}

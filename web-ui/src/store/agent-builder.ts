@@ -29,6 +29,7 @@ type AgentBuilderState = {
   team: PersonaAgent[]
   selectedClusterId: number | null
   personaEdits: Record<number, PersonaPatch>
+  agentColors: Record<number, number>
 }
 
 type AgentBuilderActions = {
@@ -43,6 +44,7 @@ type AgentBuilderActions = {
   teamMemberAdded: (persona: PersonaAgent) => void
   teamMemberRemoved: (clusterId: number) => void
   personaEdited: (clusterId: number, patch: PersonaPatch) => void
+  agentColorSet: (clusterId: number, index: number) => void
 }
 
 export const TEAM_SIZE_MAX = TEAM_MAX
@@ -61,6 +63,7 @@ export const useAgentBuilderStore = create<
       team: [],
       selectedClusterId: null,
       personaEdits: {},
+      agentColors: {},
 
       researchProblemDraftChanged: (text) => set({ draft: text }),
 
@@ -78,6 +81,7 @@ export const useAgentBuilderStore = create<
           team: [],
           selectedClusterId: null,
           personaEdits: {},
+          agentColors: {},
         }),
 
       personasSet: (personas) => set({ personas }),
@@ -119,6 +123,11 @@ export const useAgentBuilderStore = create<
             [clusterId]: { ...state.personaEdits[clusterId], ...patch },
           },
         })),
+
+      agentColorSet: (clusterId, index) =>
+        set((state) => ({
+          agentColors: { ...state.agentColors, [clusterId]: index },
+        })),
     }),
     {
       name: "agent-builder",
@@ -135,6 +144,7 @@ export const useAgentBuilderStore = create<
         team: s.team,
         selectedClusterId: s.selectedClusterId,
         personaEdits: s.personaEdits,
+        agentColors: s.agentColors,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return

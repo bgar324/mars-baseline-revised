@@ -177,6 +177,19 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+
+  /* agent palette (solid fill + white text, white passes WCAG AA) */
+  --color-agent-1: oklch(0.514 0.222 16.9);    /* rose */
+  --color-agent-2: oklch(0.553 0.195 38.4);    /* orange */
+  --color-agent-3: oklch(0.527 0.138 150.1);   /* green */
+  --color-agent-4: oklch(0.508 0.118 165.6);   /* emerald */
+  --color-agent-5: oklch(0.511 0.096 186.4);   /* teal */
+  --color-agent-6: oklch(0.520 0.105 223.1);   /* cyan */
+  --color-agent-7: oklch(0.488 0.243 264.4);   /* blue */
+  --color-agent-8: oklch(0.457 0.240 277.0);   /* indigo */
+  --color-agent-9: oklch(0.491 0.270 292.6);   /* violet */
+  --color-agent-10: oklch(0.518 0.253 324.0);  /* fuchsia */
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

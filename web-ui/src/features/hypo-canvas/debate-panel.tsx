@@ -4,8 +4,10 @@ import { Fragment, useMemo } from "react"
 import { Lightbulb, Reply, Sparkles } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
+import { AgentAvatar } from "@/components/common/agent-avatar"
 import { InlineCitation } from "@/components/common/inline-citation"
 import { StreamingMarkdown } from "@/components/common/streaming-markdown"
+import type { Mention } from "@/components/common/streaming-markdown"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Checkpoint } from "@/components/ui/checkpoint"
 import {
@@ -20,7 +22,7 @@ import { useAgentBuilderStore } from "@/store/agent-builder"
 import type { Paper } from "@/types/paper"
 import type { PersonaAgent } from "@/types/persona"
 import type { AgentTurn, TurnType } from "@/types/debate"
-import { initials } from "@/utils/avatar"
+import { agentColorClasses, useAgentColors } from "@/utils/agent-color"
 import { humanizeEnum } from "@/utils/format"
 
 import { useCycleTurns } from "./debate-store"
@@ -96,7 +98,16 @@ function Conversation({
     () => new Map(team.map((p) => [String(p.cluster_id), p])),
     [team],
   )
-  const mentionNames = useMemo(() => team.map((p) => p.name), [team])
+  const agentColors = useAgentColors()
+  const mentions = useMemo<Mention[]>(
+    () =>
+      team.map((p) => ({
+        name: p.name,
+        className: agentColorClasses(agentColors[p.cluster_id] ?? p.cluster_id)
+          .tint,
+      })),
+    [team, agentColors],
+  )
 
   if (turns.length === 0 && !isRunning) {
     return (
@@ -136,7 +147,7 @@ function Conversation({
                 turn={turn}
                 isStreaming={isRunning && idx === lastIdx}
                 persona={personasById.get(turn.agent_id)}
-                mentionNames={mentionNames}
+                mentions={mentions}
               />
             </Fragment>
           )
@@ -150,12 +161,12 @@ function TurnRow({
   turn,
   isStreaming,
   persona,
-  mentionNames,
+  mentions,
 }: {
   turn: AgentTurn
   isStreaming: boolean
   persona: PersonaAgent | undefined
-  mentionNames: string[]
+  mentions: Mention[]
 }) {
   const { data: papers } = usePapers()
   const papersById = useMemo(() => {
@@ -165,11 +176,20 @@ function TurnRow({
   }, [papers])
   return (
     <div className="flex gap-2.5 py-3 animate-in fade-in-0 duration-300">
-      <Avatar className="mt-0.5 size-5 shrink-0">
-        <AvatarFallback className="bg-muted pt-px text-[9px] leading-none text-muted-foreground">
-          {initials(persona?.name ?? "??")}
-        </AvatarFallback>
-      </Avatar>
+      {persona ? (
+        <AgentAvatar
+          clusterId={persona.cluster_id}
+          name={persona.name}
+          className="mt-0.5 size-5 shrink-0"
+          fallbackClassName="pt-px text-[9px] leading-none"
+        />
+      ) : (
+        <Avatar className="mt-0.5 size-5 shrink-0">
+          <AvatarFallback className="bg-muted pt-px text-[9px] leading-none text-muted-foreground">
+            ??
+          </AvatarFallback>
+        </Avatar>
+      )}
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <span className="text-s font-medium">
@@ -184,7 +204,7 @@ function TurnRow({
         <StreamingMarkdown
           text={turn.message}
           isStreaming={isStreaming}
-          mentions={mentionNames}
+          mentions={mentions}
           className="text-s leading-relaxed text-muted-foreground [&_p]:my-1 [&_p]:text-s [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
         />
         {turn.evidence && turn.evidence.length > 0 && (

@@ -18,16 +18,18 @@ const CARET_CSS = [
 
 const ALLOWED_TAGS = { mention: [] }
 const LITERAL_TAG_CONTENT = ["mention"]
+const DEFAULT_MENTION = "bg-muted text-muted-foreground"
 
-function Mention({ children }: { children?: React.ReactNode }) {
-  return (
-    <span className="whitespace-nowrap rounded bg-primary/10 px-1 font-medium text-primary">
-      {children}
-    </span>
-  )
+export type Mention = {
+  name: string
+  className: string
 }
 
-const COMPONENTS = { mention: Mention } as unknown as Components
+function nodeText(node: React.ReactNode): string {
+  if (typeof node === "string") return node
+  if (Array.isArray(node)) return node.map(nodeText).join("")
+  return ""
+}
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -53,12 +55,35 @@ export function StreamingMarkdown({
   text: string
   isStreaming?: boolean
   className?: string
-  mentions?: string[]
+  mentions?: Mention[]
 }) {
   const revealed = useTypewriter(text, isStreaming)
+  const colors = useMemo(
+    () => new Map((mentions ?? []).map((m) => [m.name, m.className])),
+    [mentions],
+  )
   const content = useMemo(
-    () => linkifyMentions(revealed, mentions ?? []),
-    [revealed, mentions],
+    () => linkifyMentions(revealed, [...colors.keys()]),
+    [revealed, colors],
+  )
+  const components = useMemo(
+    () =>
+      ({
+        mention: ({ children }: { children?: React.ReactNode }) => {
+          const name = nodeText(children).replace(/^@/, "")
+          return (
+            <span
+              className={cn(
+                "whitespace-nowrap rounded px-1 font-medium",
+                colors.get(name) ?? DEFAULT_MENTION,
+              )}
+            >
+              {children}
+            </span>
+          )
+        },
+      }) as unknown as Components,
+    [colors],
   )
   return (
     <Streamdown
@@ -66,7 +91,7 @@ export function StreamingMarkdown({
       isAnimating={isStreaming}
       caret={isStreaming ? "circle" : undefined}
       mode={isStreaming ? "streaming" : "static"}
-      components={COMPONENTS}
+      components={components}
       allowedTags={ALLOWED_TAGS}
       literalTagContent={LITERAL_TAG_CONTENT}
       parseIncompleteMarkdown

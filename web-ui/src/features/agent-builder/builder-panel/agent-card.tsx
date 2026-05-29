@@ -1,12 +1,11 @@
 "use client"
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { AgentAvatar } from "@/components/common/agent-avatar"
 import { rightPanelRef } from "@/features/hypo-canvas/panel-refs"
 import { usePersonas } from "@/hooks/use-personas"
 import { cn } from "@/lib/utils"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import type { PersonaAgent } from "@/types/persona"
-import { initials } from "@/utils/avatar"
 import { humanizeEnum } from "@/utils/format"
 
 const SECTION_LABEL =
@@ -43,11 +42,12 @@ function AgentCard({ persona }: { persona: PersonaAgent }) {
       )}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <Avatar className="size-6">
-          <AvatarFallback className="bg-muted text-[10px] text-muted-foreground">
-            {initials(persona.name)}
-          </AvatarFallback>
-        </Avatar>
+        <AgentAvatar
+          clusterId={persona.cluster_id}
+          name={persona.name}
+          className="size-6"
+          fallbackClassName="text-[10px]"
+        />
         <div className="flex min-w-0 flex-col">
           <span className="truncate text-xs font-medium">{persona.name}</span>
           <span className="truncate font-mono text-[10px] uppercase text-muted-foreground">

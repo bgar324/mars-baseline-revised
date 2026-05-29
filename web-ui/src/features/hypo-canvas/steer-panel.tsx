@@ -6,13 +6,13 @@ import { BubbleMenu } from "@tiptap/react/menus"
 import StarterKit from "@tiptap/starter-kit"
 import { ChevronDown, ChevronUp, LoaderCircle } from "lucide-react"
 
+import { AgentAvatar } from "@/components/common/agent-avatar"
 import { PaperCard } from "@/components/common/paper-card"
 import {
   BasePanel,
   BasePanelBody,
   BasePanelSection,
 } from "@/components/layouts/base-panel"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
   Collapsible,
@@ -25,7 +25,6 @@ import { usePapers } from "@/hooks/use-papers"
 import type { PersonaAgent } from "@/types/persona"
 import type { Paper } from "@/types/paper"
 import type { Steer, SteerType } from "@/types/debate"
-import { initials } from "@/utils/avatar"
 import { humanizeEnum } from "@/utils/format"
 
 import { useCycleTurns, useDebateStore, useProposal } from "./debate-store"
@@ -86,11 +85,12 @@ function AgentBlock({
   return (
     <div className="flex flex-col gap-3 rounded-md border bg-background p-3">
       <div className="flex min-w-0 items-center gap-2">
-        <Avatar className="size-7">
-          <AvatarFallback className="bg-muted text-[10px] text-muted-foreground">
-            {initials(persona.name)}
-          </AvatarFallback>
-        </Avatar>
+        <AgentAvatar
+          clusterId={persona.cluster_id}
+          name={persona.name}
+          className="size-7"
+          fallbackClassName="text-[10px]"
+        />
         <div className="flex min-w-0 flex-col">
           <span className="truncate text-s font-medium">{persona.name}</span>
           <span className="truncate font-mono text-[10px] uppercase text-muted-foreground">
