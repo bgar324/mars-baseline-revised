@@ -9,10 +9,12 @@ export type TextShimmerProps = {
   children: React.ReactNode
 } & React.HTMLAttributes<HTMLElement>
 
+const SHIMMER_BASE = "color-mix(in oklab, var(--muted-foreground) 50%, transparent)"
+
 export function TextShimmer({
   as = "span",
   className,
-  duration = 4,
+  duration = 2.4,
   spread = 20,
   children,
   ...props
@@ -24,11 +26,11 @@ export function TextShimmer({
     <Component
       className={cn(
         "bg-size-[200%_auto] bg-clip-text font-medium text-transparent",
-        "animate-[shimmer_4s_infinite_linear]",
+        "animate-[shimmer_2.4s_infinite_linear]",
         className,
       )}
       style={{
-        backgroundImage: `linear-gradient(to right, var(--muted-foreground) ${50 - dynamicSpread}%, var(--foreground) 50%, var(--muted-foreground) ${50 + dynamicSpread}%)`,
+        backgroundImage: `linear-gradient(to right, ${SHIMMER_BASE} ${50 - dynamicSpread}%, var(--foreground) 50%, ${SHIMMER_BASE} ${50 + dynamicSpread}%)`,
         animationDuration: `${duration}s`,
       }}
       {...props}

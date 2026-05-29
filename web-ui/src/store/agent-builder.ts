@@ -30,6 +30,7 @@ type AgentBuilderState = {
   selectedClusterId: number | null
   personaEdits: Record<number, PersonaPatch>
   agentColors: Record<number, number>
+  stageTimings: Record<string, { start: number; end: number | null }>
 }
 
 type AgentBuilderActions = {
@@ -64,6 +65,7 @@ export const useAgentBuilderStore = create<
       selectedClusterId: null,
       personaEdits: {},
       agentColors: {},
+      stageTimings: {},
 
       researchProblemDraftChanged: (text) => set({ draft: text }),
 
@@ -82,6 +84,7 @@ export const useAgentBuilderStore = create<
           selectedClusterId: null,
           personaEdits: {},
           agentColors: {},
+          stageTimings: {},
         }),
 
       personasSet: (personas) => set({ personas }),
@@ -89,11 +92,24 @@ export const useAgentBuilderStore = create<
       focalClaimSet: (claim) => set({ focalClaim: claim }),
 
       pipelineStageSet: (stage, status) =>
-        set((state) => ({
-          pipelineStages: { ...state.pipelineStages, [stage]: status },
-        })),
+        set((state) => {
+          const timings = { ...state.stageTimings }
+          if (status === "running") {
+            timings[stage] = { start: Date.now(), end: null }
+          } else if (status === "complete") {
+            const prev = timings[stage]
+            timings[stage] = {
+              start: prev?.start ?? Date.now(),
+              end: Date.now(),
+            }
+          }
+          return {
+            pipelineStages: { ...state.pipelineStages, [stage]: status },
+            stageTimings: timings,
+          }
+        }),
 
-      pipelineStagesReset: () => set({ pipelineStages: {} }),
+      pipelineStagesReset: () => set({ pipelineStages: {}, stageTimings: {} }),
 
       agentSelected: (clusterId) => set({ selectedClusterId: clusterId }),
 

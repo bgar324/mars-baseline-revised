@@ -67,6 +67,7 @@ function deriveResearchStages(
 ): ResearchStage[] | undefined {
   const stages: ResearchStage[] = STAGE_ORDER.map((stage) => {
     const base = {
+      key: stage,
       name: STAGE_LABEL[stage],
       description: STAGE_DESCRIPTION[stage],
     }

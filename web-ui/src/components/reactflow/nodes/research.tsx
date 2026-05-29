@@ -1,6 +1,6 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useEffect, useState } from "react"
 import type { Node, NodeProps } from "@xyflow/react"
 import { Check, LoaderCircle } from "lucide-react"
 
@@ -13,6 +13,7 @@ import {
 import { TextShimmer } from "@/components/ui/text-shimmer"
 import { ChainHandle } from "@/components/reactflow/handles/chain"
 import { cn } from "@/lib/utils"
+import { useAgentBuilderStore } from "@/store/agent-builder"
 import type {
   CanvasNodeData,
   ResearchStage,
@@ -24,12 +25,35 @@ type ResearchNodeT = Node<ResearchData, "research">
 const LABEL =
   "text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground"
 
+function formatElapsed(ms: number): string {
+  return `${Math.max(0, Math.floor(ms / 1000))}s`
+}
+
 function ResearchNodeComponent({ data, selected }: NodeProps<ResearchNodeT>) {
   const stages = data.stages ?? []
   const visible = stages.filter(
     (s) => s.status === "done" || s.status === "running",
   )
   const doneCount = stages.filter((s) => s.status === "done").length
+  const hasRunning = stages.some((s) => s.status === "running")
+
+  const stageTimings = useAgentBuilderStore((s) => s.stageTimings)
+  const [now, setNow] = useState(0)
+
+  useEffect(() => {
+    if (!hasRunning) return
+    const id = setInterval(() => setNow(Date.now()), 500)
+    return () => clearInterval(id)
+  }, [hasRunning])
+
+  const times = Object.values(stageTimings)
+  const start = times.length ? Math.min(...times.map((t) => t.start)) : null
+  const allEnded =
+    times.length > 0 && times.every((t) => t.end !== null)
+  const end = allEnded
+    ? Math.max(...times.map((t) => t.end as number))
+    : null
+  const total = start !== null ? (end ?? now) - start : null
 
   return (
     <>
@@ -55,15 +79,17 @@ function ResearchNodeComponent({ data, selected }: NodeProps<ResearchNodeT>) {
           <ChainOfThought>
             <ChainOfThoughtStep defaultOpen>
               <ChainOfThoughtTrigger>
-                {doneCount < stages.length ? (
-                  <TextShimmer className="text-s">
-                    Pipeline · {doneCount} of {stages.length}
-                  </TextShimmer>
-                ) : (
-                  <span className="text-s text-muted-foreground">
-                    Pipeline · {doneCount} of {stages.length}
+                <span className="inline-flex items-center gap-1 text-s text-muted-foreground">
+                  <span>
+                    Pipeline · {doneCount} of {stages.length} ·{" "}
+                    {doneCount === stages.length
+                      ? `Completed${total !== null ? ` in ${formatElapsed(total)}` : ""}`
+                      : `Running… ${total !== null ? formatElapsed(total) : "0s"}`}
                   </span>
-                )}
+                  {doneCount === stages.length && (
+                    <Check className="size-3.5 shrink-0" />
+                  )}
+                </span>
               </ChainOfThoughtTrigger>
               <ChainOfThoughtContent>
                 {visible.map((stage) => (

@@ -31,6 +31,7 @@ export type CanvasNodeKind =
 export type ResearchStageStatus = "pending" | "running" | "done"
 
 export type ResearchStage = {
+  key: StageName
   name: string
   status: ResearchStageStatus
   description?: string

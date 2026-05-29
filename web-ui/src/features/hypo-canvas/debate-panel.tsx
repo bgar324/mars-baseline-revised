@@ -16,7 +16,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { ThinkingBar } from "@/components/ui/thinking-bar"
+import { TextShimmer } from "@/components/ui/text-shimmer"
 import { usePapers } from "@/hooks/use-papers"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import type { Paper } from "@/types/paper"
@@ -116,43 +116,45 @@ function Conversation({
   }
 
   const lastIdx = turns.length - 1
-  const activePersona = turns.length > 0
-    ? personasById.get(turns[lastIdx].agent_id)
-    : undefined
-  const thinkingText = activePersona
-    ? `${activePersona.name} is thinking…`
-    : "Agents are thinking…"
+  const activePersona =
+    turns.length > 0 ? personasById.get(turns[lastIdx].agent_id) : undefined
 
   return (
     <div className="flex flex-col">
+      {turns.map((turn, idx) => {
+        const prev = idx > 0 ? turns[idx - 1] : null
+        const showCheckpoint = !prev || prev.turn_type !== turn.turn_type
+        return (
+          <Fragment key={turn.turn_id}>
+            {showCheckpoint && (
+              <Checkpoint
+                icon={PHASE_ICON[turn.turn_type]}
+                label={turn.turn_type}
+                className={idx === 0 ? "pb-5" : "py-5"}
+              />
+            )}
+            <TurnRow
+              turn={turn}
+              isStreaming={isRunning && idx === lastIdx}
+              persona={personasById.get(turn.agent_id)}
+              mentions={mentions}
+            />
+          </Fragment>
+        )
+      })}
       {isRunning && (
-        <div className="sticky top-0 z-10 -mx-4 mb-1 border-b bg-background px-4 pb-3">
-          <ThinkingBar text={thinkingText} />
+        <div className="flex items-center gap-2.5 py-3">
+          {activePersona && (
+            <AgentAvatar
+              clusterId={activePersona.cluster_id}
+              name={activePersona.name}
+              className="size-5 shrink-0"
+              fallbackClassName="pt-px text-[9px] leading-none"
+            />
+          )}
+          <TextShimmer className="text-s">Thinking…</TextShimmer>
         </div>
       )}
-      <div className="flex flex-col">
-        {turns.map((turn, idx) => {
-          const prev = idx > 0 ? turns[idx - 1] : null
-          const showCheckpoint = !prev || prev.turn_type !== turn.turn_type
-          return (
-            <Fragment key={turn.turn_id}>
-              {showCheckpoint && (
-                <Checkpoint
-                  icon={PHASE_ICON[turn.turn_type]}
-                  label={turn.turn_type}
-                  className={idx === 0 ? "pb-5" : "py-5"}
-                />
-              )}
-              <TurnRow
-                turn={turn}
-                isStreaming={isRunning && idx === lastIdx}
-                persona={personasById.get(turn.agent_id)}
-                mentions={mentions}
-              />
-            </Fragment>
-          )
-        })}
-      </div>
     </div>
   )
 }
