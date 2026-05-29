@@ -113,4 +113,10 @@ Use outcome as follows:
 Do not label a live dispute as an assumption.
 Do not create branches from trivial agreement.
 Do not introduce new claims that were not present in the transcript.
+
+## OUTPUT STYLE
+
+Write every item in plain language a non-specialist could follow.
+Each agreement, disagreement, question, and hypothesis is ONE short phrase: max 20 words, one idea, no nested clauses.
+Do not stack qualifiers or chain multiple mechanisms into a single item.
 """

@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from mars.models.persona import PersonaAgent
 
@@ -13,6 +13,8 @@ DebateAction = Literal["accept", "branch", "close"]
 Outcome = Literal["question", "disagreement", "assumption"]
 CycleStatus = Literal["pending", "running", "awaiting", "complete"]
 SteerType = Literal["emphasize", "reframe"]
+
+SynthesisItem = Annotated[str, StringConstraints(max_length=160)]
 
 
 def _utcnow() -> datetime:
@@ -59,8 +61,8 @@ class AgentTurnInput(BaseModel):
     )
     evidence: list[Citation] = Field(default_factory=list, max_length=4)
     message: str = Field(
-        description="Your spoken turn — 3-5 sentences, no preamble.",
-        max_length=1500,
+        description="Your spoken turn — 1-2 short sentences in plain language.",
+        max_length=350,
     )
 
 
@@ -79,16 +81,20 @@ class Branch(BaseModel):
 
 class DebateSynthesis(BaseModel):
     cycle_id: str
-    points_of_agreement: list[str] = Field(default_factory=list, max_length=5)
-    points_of_disagreement: list[str] = Field(default_factory=list, max_length=5)
-    questions: list[str] = Field(default_factory=list, max_length=5)
-    candidate_hypotheses: list[str] = Field(default_factory=list, max_length=3)
+    points_of_agreement: list[SynthesisItem] = Field(default_factory=list, max_length=5)
+    points_of_disagreement: list[SynthesisItem] = Field(
+        default_factory=list, max_length=5
+    )
+    questions: list[SynthesisItem] = Field(default_factory=list, max_length=5)
+    candidate_hypotheses: list[SynthesisItem] = Field(
+        default_factory=list, max_length=3
+    )
     branches: list[Branch] = Field(default_factory=list, max_length=3)
 
 
 class Stance(BaseModel):
     summary: str = Field(
-        description="Your position now, one or two sentences.", max_length=600
+        description="Your position now, one or two short sentences.", max_length=300
     )
     claims: list[str] = Field(default_factory=list, max_length=6)
     premises: list[str] = Field(default_factory=list, max_length=6)

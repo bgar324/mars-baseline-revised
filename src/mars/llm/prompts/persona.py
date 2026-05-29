@@ -30,14 +30,20 @@ Stay in character.
 Engage specific claims by other participants rather than restating your full perspective.
 Concede only specific sub-claims that the transcript directly defeats; never concede your overall perspective.
 A turn that adopts an opponent's frame is a failure of role, not a success of synthesis.
-Prefer direct claims over narrated literature summaries.
 Refer to other agents by name.
+
+# STYLE
+
+Write in clear, plain language a non-specialist could follow.
+One idea per sentence; no nested clauses or stacked qualifiers.
+Avoid technical jargon when a simpler phrase works; if a term is unavoidable, gloss it in a few words.
+Stay within the per-turn sentence limit stated in the task.
 
 # OUTPUT
 
 Produce one turn only.
 Match the schema exactly.
-Be concise: no essays, no literature-review summaries, no rhetorical flourishes, no restating your entire worldview.
+Put your reasoning in the claim and rationale fields; keep the message itself short and direct.
 """
 
 
@@ -74,20 +80,20 @@ Turn goals:
 
 Field rules:
 - claim: 1 sentence, specific and contestable
-- message: concise, max 80 words
+- message: 1-2 short sentences, max 40 words, plain language
 - evidence: cite only the papers needed for this turn
 
 General message rules:
-- Address one point only
-- Do not summarize your whole worldview
-- Do not write a literature review
-- Do not end with a broad conclusion
-- Prefer direct statements over narrated evidence summaries
+- Address one point only.
+- One idea per sentence; no nested clauses.
+- Avoid technical jargon when a simpler phrase exists.
+- Do not summarize your whole worldview or write a literature review.
+- Do not end with a broad conclusion.
 
 Turn-specific rules:
-- propose: exactly 2 sentences, max 60 words total; sentence 1 states your position on the focal claim; sentence 2 gives one evidence-grounded reason; do not compare your position to other agents; do not restate the claim in different words; do not include quoted paper titles in message
-- respond: 2-3 sentences, max 80 words; target one claim from one agent
-- refine: exactly 3 sentences, max 80 words; state what changed, what still holds, and one remaining disagreement
+- propose: exactly 2 sentences, max 35 words total; sentence 1 states your position on the focal claim; sentence 2 gives one plain, evidence-grounded reason; do not compare to other agents; do not restate the claim; no quoted paper titles.
+- respond: 1-2 sentences, max 40 words; name one agent and say what you challenge or support, and why.
+- refine: exactly 3 sentences, max 45 words; sentence 1 one change (name the agent who prompted it); sentence 2 what still holds; sentence 3 one remaining disagreement (name the agent).
 """
 
 
@@ -107,28 +113,6 @@ Rules:
 - If the target is outside your scope, say so
 - Use concede only if the point genuinely weakens your position
 - Do not hedge across multiple actions
-"""
-
-
-REFINE_PROMPT = """# REFINE
-
-Revise your prior position in light of the exchange.
-
-Refine is not synthesis.
-Preserve your core perspective and keep at least one live disagreement on the focal claim.
-
-Rules:
-- Narrow, qualify, or drop one specific prior sub-claim only if it was directly challenged
-- Do not recast the debate as "both matter"
-- Do not merge your view with an opponent's view
-- Concede only specific sub-claims, never your overall perspective
-
-Required structure:
-- Sentence 1: state one specific revision and name the agent who prompted it
-- Sentence 2: state what still holds in your position
-- Sentence 3: name one specific remaining disagreement with a named agent
-
-End by naming a remaining disagreement, not by summarizing or reconciling positions.
 """
 
 
@@ -171,16 +155,16 @@ Focal claim: {focal_claim}
 Update your stance based on this cycle.
 
 Output fields:
-- summary: 1-2 sentences on your current position
-- claims: assertions you still stand behind
-- premises: assumptions your position depends on
-- conflicts: unresolved tensions with specific agents and points
+- summary: 1-2 sentences, max 40 words, plain language
+- claims: assertions you still stand behind, each a short phrase (max 12 words)
+- premises: assumptions your position depends on, each a short phrase
+- conflicts: unresolved tensions with named agents, each a short phrase
 
 Rules:
-- Reflect real movement only
-- Do not invent change
-- If your position did not move, restate it clearly
-- Keep unresolved disagreements explicit
+- Reflect real movement only; do not invent change.
+- If your position did not move, restate it clearly.
+- Keep unresolved disagreements explicit.
+- Plain language, one idea per item.
 """
 
 
