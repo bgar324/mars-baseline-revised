@@ -122,7 +122,9 @@ export const useAgentBuilderStore = create<
     }),
     {
       name: "agent-builder",
+      version: 1,
       storage: createJSONStorage(() => localStorage),
+      migrate: (persisted) => persisted as Partial<AgentBuilderState>,
       partialize: (s) => ({
         draft: s.draft,
         committed: s.committed,
