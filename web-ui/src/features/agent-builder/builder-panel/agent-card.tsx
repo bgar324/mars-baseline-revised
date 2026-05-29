@@ -1,6 +1,7 @@
 "use client"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { rightPanelRef } from "@/features/hypo-canvas/panel-refs"
 import { usePersonas } from "@/hooks/use-personas"
 import { cn } from "@/lib/utils"
 import { useAgentBuilderStore } from "@/store/agent-builder"
@@ -19,15 +20,20 @@ function AgentCard({ persona }: { persona: PersonaAgent }) {
 
   const isSelected = selected === persona.cluster_id
 
+  const onActivate = () => {
+    select(persona.cluster_id)
+    rightPanelRef.current?.expand()
+  }
+
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => select(persona.cluster_id)}
+      onClick={onActivate}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault()
-          select(persona.cluster_id)
+          onActivate()
         }
       }}
       className={cn(

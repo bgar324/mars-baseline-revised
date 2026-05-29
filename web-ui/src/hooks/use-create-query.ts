@@ -53,30 +53,55 @@ function assertStageComplete(state: PipelineState, stage: StageName): void {
 
 export function useCreateQuery() {
   const queryClient = useQueryClient()
-  const committed = useAgentBuilderStore((s) => s.researchProblemCommitted)
 
   return useMutation({
     mutationFn: async (text: string) => {
+      const {
+        researchProblemCommitted: commit,
+        focalClaimSet,
+        pipelineStageSet,
+        pipelineStagesReset,
+      } = useAgentBuilderStore.getState()
+
+      pipelineStagesReset()
+      focalClaimSet(null)
+
+      pipelineStageSet("extract", "running")
+      pipelineStageSet("expand", "running")
       const initial = await createQuery(text)
       const id = initial.query_id
-      console.log("[create-query] query_id=", id)
+      commit(text, id)
       assertStageComplete(initial, "extract")
-      assertStageComplete(initial, "expand")
+      pipelineStageSet("extract", "complete")
 
+      const extractResult = initial.stages.extract?.result as
+        | { claim?: string }
+        | null
+        | undefined
+      focalClaimSet(extractResult?.claim ?? text)
+
+      assertStageComplete(initial, "expand")
+      pipelineStageSet("expand", "complete")
+
+      pipelineStageSet("retrieve", "running")
       const afterRetrieve = await runStage(id, "retrieve")
       assertStageComplete(afterRetrieve, "retrieve")
+      pipelineStageSet("retrieve", "complete")
 
+      pipelineStageSet("cluster", "running")
       const afterClusters = await runStage(id, "clusters")
       assertStageComplete(afterClusters, "cluster")
+      pipelineStageSet("cluster", "complete")
 
+      pipelineStageSet("persona", "running")
       const afterPersonas = await runStage(id, "personas")
       assertStageComplete(afterPersonas, "persona")
+      pipelineStageSet("persona", "complete")
 
       return { id, text }
     },
-    onSuccess: ({ id, text }) => {
+    onSuccess: ({ id }) => {
       console.log("[create-query] onSuccess", { id })
-      committed(text, id)
       queryClient.invalidateQueries({ queryKey: ["personas", id] })
     },
     onError: (err) => {

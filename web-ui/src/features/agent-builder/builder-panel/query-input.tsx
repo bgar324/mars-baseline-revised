@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { useSessionReset } from "@/features/agent-builder/use-session-reset"
 import { useCreateQuery } from "@/hooks/use-create-query"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 
@@ -27,7 +28,7 @@ export function QueryInput() {
   const draftChanged = useAgentBuilderStore(
     (s) => s.researchProblemDraftChanged,
   )
-  const cleared = useAgentBuilderStore((s) => s.researchProblemCleared)
+  const cleared = useSessionReset()
 
   const { mutate, isPending } = useCreateQuery()
 

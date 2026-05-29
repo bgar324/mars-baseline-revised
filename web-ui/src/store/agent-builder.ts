@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 
 import type { PersonaAgent } from "@/types/persona"
+import type { StageName, StageStatus } from "@/types/query"
 
 const TEAM_MAX = 3
 
@@ -22,6 +23,9 @@ type AgentBuilderState = {
   draft: string
   committed: string | null
   queryId: string | null
+  focalClaim: string | null
+  pipelineStages: Partial<Record<StageName, StageStatus>>
+  personas: PersonaAgent[]
   team: PersonaAgent[]
   selectedClusterId: number | null
   personaEdits: Record<number, PersonaPatch>
@@ -31,6 +35,10 @@ type AgentBuilderActions = {
   researchProblemDraftChanged: (text: string) => void
   researchProblemCommitted: (text: string, queryId: string) => void
   researchProblemCleared: () => void
+  focalClaimSet: (claim: string | null) => void
+  pipelineStageSet: (stage: StageName, status: StageStatus) => void
+  pipelineStagesReset: () => void
+  personasSet: (personas: PersonaAgent[]) => void
   agentSelected: (clusterId: number | null) => void
   teamMemberAdded: (persona: PersonaAgent) => void
   teamMemberRemoved: (clusterId: number) => void
@@ -47,6 +55,9 @@ export const useAgentBuilderStore = create<
       draft: "",
       committed: null,
       queryId: null,
+      focalClaim: null,
+      pipelineStages: {},
+      personas: [],
       team: [],
       selectedClusterId: null,
       personaEdits: {},
@@ -61,10 +72,24 @@ export const useAgentBuilderStore = create<
           draft: "",
           committed: null,
           queryId: null,
+          focalClaim: null,
+          pipelineStages: {},
+          personas: [],
           team: [],
           selectedClusterId: null,
           personaEdits: {},
         }),
+
+      personasSet: (personas) => set({ personas }),
+
+      focalClaimSet: (claim) => set({ focalClaim: claim }),
+
+      pipelineStageSet: (stage, status) =>
+        set((state) => ({
+          pipelineStages: { ...state.pipelineStages, [stage]: status },
+        })),
+
+      pipelineStagesReset: () => set({ pipelineStages: {} }),
 
       agentSelected: (clusterId) => set({ selectedClusterId: clusterId }),
 
@@ -73,7 +98,13 @@ export const useAgentBuilderStore = create<
           if (state.team.length >= TEAM_MAX) return state
           if (state.team.some((p) => p.cluster_id === persona.cluster_id))
             return state
-          return { team: [...state.team, persona] }
+          return {
+            team: [...state.team, persona],
+            selectedClusterId:
+              state.team.length === 0
+                ? persona.cluster_id
+                : state.selectedClusterId,
+          }
         }),
 
       teamMemberRemoved: (clusterId) =>
@@ -96,11 +127,22 @@ export const useAgentBuilderStore = create<
         draft: s.draft,
         committed: s.committed,
         queryId: s.queryId,
+        focalClaim: s.focalClaim,
+        pipelineStages: s.pipelineStages,
+        personas: s.personas,
         team: s.team,
         selectedClusterId: s.selectedClusterId,
         personaEdits: s.personaEdits,
       }),
-      version: 1,
+      onRehydrateStorage: () => (state) => {
+        if (!state) return
+        const sanitized: typeof state.pipelineStages = {}
+        for (const [k, v] of Object.entries(state.pipelineStages ?? {})) {
+          sanitized[k as keyof typeof sanitized] =
+            v === "running" ? "pending" : v
+        }
+        state.pipelineStages = sanitized
+      },
     },
   ),
 )
