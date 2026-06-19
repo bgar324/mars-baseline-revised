@@ -3,8 +3,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ClientConfig(BaseSettings):
-    """Settings shared by HTTP provider clients."""
-
     model_config = SettingsConfigDict(env_prefix="CLIENT_", extra="ignore")
 
     base_url: str

@@ -24,21 +24,14 @@ from mars.models.grobid import (
 
 
 class ParserError(Exception):
-    """Raised when TEI XML parsing fails."""
+    ...
 
 
 class Parser:
-    """Parse GROBID TEI XML into an Article model."""
-
     def __init__(self, stream: bytes) -> None:
         self.soup = BeautifulSoup(stream, "lxml-xml")
 
     def parse(self) -> Article:
-        """Parse the full TEI document into an Article.
-
-        Raises:
-            ParserError: If required XML elements are missing or malformed.
-        """
         body = self.soup.body
         if not isinstance(body, Tag):
             raise ParserError("Missing body element in TEI document")
@@ -89,7 +82,6 @@ class Parser:
         )
 
     def citation(self, source_tag: Tag) -> Citation:
-        """Parse a biblStruct element into a Citation."""
         title = self.title(source_tag, attrs={"type": "main"})
         if not title:
             title = self.title(source_tag, attrs={"level": "m"})
@@ -119,7 +111,6 @@ class Parser:
         return citation
 
     def title(self, source_tag: Tag | None, attrs: dict[str, Any] | None = None) -> str:
-        """Extract text from a title element, empty string if absent."""
         if attrs is None:
             attrs = {}
 
@@ -131,7 +122,6 @@ class Parser:
         return title
 
     def target(self, source_tag: Tag | None) -> str | None:
-        """Extract the target URL from a ptr element."""
         if source_tag is not None:
             if (ptr_tag := source_tag.ptr) is not None:
                 if "target" in ptr_tag.attrs:
@@ -143,7 +133,6 @@ class Parser:
     def idno(
         self, source_tag: Tag | None, attrs: dict[str, Any] | None = None
     ) -> str | None:
-        """Extract an identifier from an idno element."""
         if attrs is None:
             attrs = {}
 
@@ -153,7 +142,6 @@ class Parser:
         return None
 
     def keywords(self, source_tag: Tag | None) -> set[str]:
-        """Extract cleaned keywords from term elements."""
         keywords: set[str] = set()
 
         if source_tag is not None:
@@ -165,14 +153,12 @@ class Parser:
         return keywords
 
     def publisher(self, source_tag: Tag | None) -> str | None:
-        """Extract the publisher name from a publisher element."""
         if source_tag is not None:
             if (publisher_tag := source_tag.find("publisher")) is not None:
                 return publisher_tag.text or None
         return None
 
     def date(self, source_tag: Tag | None) -> Date | None:
-        """Parse a date element with a 'when' attribute."""
         if source_tag is not None:
             if (date_tag := source_tag.date) is not None:
                 if "when" in date_tag.attrs:
@@ -182,7 +168,6 @@ class Parser:
         return None
 
     def scope(self, source_tag: Tag | None) -> Scope | None:
-        """Parse bibliographic scope from biblScope elements."""
         if source_tag is not None:
             scope = Scope()
             for scope_tag in source_tag.find_all("biblScope"):
@@ -227,7 +212,6 @@ class Parser:
         return None
 
     def authors(self, source_tag: Tag | None) -> list[Author]:
-        """Parse author elements into Author models."""
         authors: list[Author] = []
 
         if source_tag is not None:
@@ -269,7 +253,6 @@ class Parser:
         return authors
 
     def section(self, source_tag: Tag | None, title: str = "") -> Section | None:
-        """Parse a div element with a head into a Section."""
         if source_tag is not None:
             head = source_tag.find("head")
 
@@ -296,7 +279,6 @@ class Parser:
         return None
 
     def ref_text(self, source_tag: Tag | None) -> RefText | None:
-        """Parse a paragraph with embedded reference elements."""
         if source_tag is not None:
             text_and_refs = self._text_and_refs(source_tag)
             ref_text = RefText(text="")
@@ -329,7 +311,6 @@ class Parser:
         return None
 
     def table(self, source_tag: Tag | None) -> Table | None:
-        """Parse a figure element with type='table' into a Table."""
         if source_tag is not None:
             if (head_tag := source_tag.find("head")) is not None:
                 if head_text := head_tag.get_text():
@@ -346,7 +327,6 @@ class Parser:
         return None
 
     def _parse_date(self, date: str) -> Date | None:
-        """Parse an ISO 8601 date string into a Date."""
         tokens = list(filter(None, date.split(sep="-")))
 
         match len(tokens):
@@ -360,7 +340,6 @@ class Parser:
                 return Date(year=tokens[0], month=tokens[1], day=tokens[2])
 
     def _text_and_refs(self, source_tag: Tag) -> Generator[PageElement, None, None]:
-        """Yield text nodes and ref tags in document order."""
         for descendant in source_tag.descendants:
             descendant_type = type(descendant)
             if descendant_type is Tag and descendant.name == "ref":  # type: ignore[attr-defined]
@@ -370,7 +349,6 @@ class Parser:
 
     @staticmethod
     def _clean_title_string(s: str) -> str:
-        """Strip leading non-alphabetic characters and capitalize."""
         s = s.strip()
 
         while s and not s[0].isalpha():

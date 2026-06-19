@@ -7,8 +7,6 @@ from mars.llm.prompts.langextract import EXAMPLES, PROMPT
 
 
 class LangExtractProvider:
-    """Async wrapper around langextract for query-level semantic role extraction."""
-
     def __init__(self, settings: LangExtractSettings) -> None:
         self._settings = settings
 
@@ -19,7 +17,6 @@ class LangExtractProvider:
         extraction_passes: int | None = None,
         max_char_buffer: int | None = None,
     ) -> lx.data.AnnotatedDocument:
-        """Extract semantic roles from text using the configured Gemini model."""
         return await asyncio.to_thread(
             lx.extract,
             text_or_documents=text,

@@ -69,11 +69,6 @@ Output:"""
 def build_expansion_prompt(
     constructs: list[tuple[str, str]], domain: str | None
 ) -> str:
-    """Build the expansion prompt.
-
-    constructs is a list of (construct_id, construct_text) pairs.
-    domain is None when no domain span was extracted.
-    """
     construct_lines = "\n".join(f"- {text} (id: {cid})" for cid, text in constructs)
     return EXPANSION_PROMPT.format(
         domain=domain or "unspecified",
@@ -82,14 +77,15 @@ def build_expansion_prompt(
 
 
 CLAIM_PROMPT = """\
-Rewrite the research query as one declarative claim.
+Rewrite the research query as one neutral, testable proposition — the single claim the debate will weigh.
 
 Rules:
-- One sentence, present tense, no hedging.
-- Keep every construct from the query.
-- Strip interrogatives (how, why, whether, does) and turn them into the implied assertion.
-- Do not add information the query does not imply.
-- Output the sentence only, no commentary.
+- Form: "whether <X relates to Y>". State the relationship to be tested; do not assert the answer.
+- One central relationship only. If the query asks several things, choose the most central — do not join claims with "and".
+- Preserve the question's scope. If it asks for a distinction or taxonomy ("which X transfer and which must be redesigned"), keep both sides in the proposition ("which elements of X transfer and which require redesign"); do not collapse it to a single sub-contest.
+- Keep the query's key constructs; add nothing it does not contain.
+- Neutral, not hedged: leave the answer open, but use no "may", "might", or "could".
+- Output the proposition only, no commentary.
 
 QUERY:
 {query}

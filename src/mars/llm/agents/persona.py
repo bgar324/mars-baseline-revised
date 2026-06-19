@@ -1,32 +1,37 @@
+from mars.llm.prompts.debate import ASSESSMENT, build_debate_prompt
 from mars.llm.prompts.persona import (
-    ACTION_PROMPT,
-    DEBATE_CONTEXT,
-    REFLECT_PROMPT,
-    STEERING_BLOCK,
     SYSTEM_PROMPT,
-    TURN_PROMPT,
+    TurnType,
     format_constraints,
     format_list,
 )
-from mars.llm.providers.base import LLMProvider
+from mars.llm.providers.base import LLMProvider, TokenUsage
 from mars.models.debate import (
+    AgentResponse,
     AgentTurn,
-    AgentTurnInput,
-    Cycle,
-    Stance,
-    Steer,
-    TurnType,
+    DebateAssessment,
+    EvidenceSet,
 )
 from mars.models.persona import PersonaAgent as PersonaModel
-from mars.models.s2 import Paper
 
 
-TEMP_BY_TURN: dict[TurnType, float] = {
-    "propose": 0.5,
-    "respond": 0.4,
-    "refine": 0.3,
+PHASE: dict[str, str] = {
+    "propose": "proposal",
+    "respond": "rebuttal",
+    "refine": "refutation",
 }
-REFLECT_TEMP = 0.2
+
+CLAIM_LIMIT = 500
+RATIONALE_LIMIT = 1400
+MESSAGE_LIMIT = 500
+
+
+def clip(text: str | None, limit: int) -> str | None:
+    if text is None or len(text) <= limit:
+        return text
+    cut = text[:limit]
+    dot = cut.rfind(". ")
+    return (cut[: dot + 1] if dot > limit * 0.6 else cut).strip()
 
 
 def render_agents(others: list[PersonaModel]) -> str:
@@ -37,36 +42,59 @@ def render_agents(others: list[PersonaModel]) -> str:
 
 def render_turns(turns: list[AgentTurn], names: dict[str, str] | None = None) -> str:
     if not turns:
-        return "No prior turns."
+        return ""
     names = names or {}
     rendered = []
     for t in turns:
         who = names.get(t.agent_id, t.agent_id)
-        header = f"[turn_id: {t.turn_id} | {who} | type: {t.turn_type}"
-        if t.response_action:
-            header += f" | action: {t.response_action}"
-        if t.target_turn_id:
-            header += f" | target: {t.target_turn_id}"
+        r = t.response
+        header = f"[{who} | {t.phase}"
+        if r.action:
+            header += f" | {r.action}"
+        if r.target_id:
+            header += f" -> {names.get(r.target_id, r.target_id)}"
         header += "]"
+        evidence = ", ".join(r.evidence) if r.evidence else "none"
         rendered.append(
-            f"{header}\nClaim: {t.claim}\nRationale: {t.rationale}\nMessage: {t.message}"
+            f"{header}\nClaim: {r.claim}\nRationale: {r.rationale}\n"
+            f"Message: {r.message}\nEvidence (corpus_ids): {evidence}"
         )
     return "\n\n".join(rendered)
 
 
-def render_evidence(papers: list[Paper]) -> str:
-    if not papers:
+def render_evidence(bundle: EvidenceSet) -> str:
+    if not bundle.snippets:
         return "No evidence available."
     blocks = []
-    for p in papers:
-        summary = p.tldr or p.abstract or "No summary available."
+    for s in bundle.snippets:
+        section = f"Section: {s.section}\n" if s.section else ""
         blocks.append(
-            f'- "{p.title}" ({p.year or "n.d."})  [paper_id: {p.id}]\n  {summary}'
+            f"Title: {s.title}\n"
+            f"Corpus ID: {s.corpus_id}\n"
+            f"{section}"
+            f"Content: {s.text}"
         )
-    return "\n\n".join(blocks)
+    return "\n\n===============\n\n".join(blocks)
 
 
-def build_system_prompt(persona: PersonaModel) -> str:
+def render_assessment(assessment: DebateAssessment) -> str:
+    disagreements = format_list(
+        [f"{', '.join(d.agents)}: {d.point}" for d in assessment.points_of_disagreement]
+    )
+    critiques = format_list(
+        [
+            f"{c.challenger or 'any'} presses {c.target}: {c.on_point}"
+            for c in assessment.critiques
+        ]
+    )
+    return ASSESSMENT.format(
+        central_conflict=assessment.central_conflict,
+        disagreements=disagreements,
+        critiques=critiques,
+    )
+
+
+def system_prompt(persona: PersonaModel) -> str:
     return SYSTEM_PROMPT.format(
         name=persona.name,
         framing=persona.framing,
@@ -78,62 +106,7 @@ def build_system_prompt(persona: PersonaModel) -> str:
     )
 
 
-def build_debate_context(
-    cycle: Cycle,
-    others: list[PersonaModel],
-    evidence: list[Paper],
-    recap: str | None,
-) -> str:
-    return DEBATE_CONTEXT.format(
-        focal_claim=cycle.focal_claim,
-        recap=recap or "Root cycle — no prior recap.",
-        agents=render_agents(others),
-        evidence=render_evidence(evidence),
-    )
-
-
-def build_turn_prompt(
-    turns: list[AgentTurn], turn_type: TurnType, names: dict[str, str]
-) -> str:
-    return TURN_PROMPT.format(turns=render_turns(turns, names), turn_type=turn_type)
-
-
-def build_steering_block(steers: list[Steer] | None, agent_id: str) -> str:
-    if not steers:
-        return ""
-    own = [s for s in steers if s.agent_id == agent_id]
-    if not own:
-        return ""
-    return STEERING_BLOCK.format(
-        emphasize=format_list([s.text for s in own if s.type == "emphasize"]),
-        reframe=format_list([s.text for s in own if s.type == "reframe"]),
-    )
-
-
-def build_reflect_prompt(
-    persona: PersonaModel,
-    cycle: Cycle,
-    own_turns: list[AgentTurn],
-    prior_stance: Stance | None,
-) -> str:
-    stance = prior_stance or Stance(summary="No prior stance.", cycle_id=cycle.cycle_id)
-    return REFLECT_PROMPT.format(
-        name=persona.name,
-        focal_claim=cycle.focal_claim,
-        turns=render_turns(own_turns, {str(persona.cluster_id): persona.name}),
-        points_of_agreement=format_list(cycle.synthesis.points_of_agreement),
-        points_of_disagreement=format_list(cycle.synthesis.points_of_disagreement),
-        questions=format_list(cycle.synthesis.questions),
-        stance_summary=stance.summary,
-        stance_claims=format_list(stance.claims),
-        stance_premises=format_list(stance.premises),
-        stance_conflicts=format_list(stance.conflicts),
-    )
-
-
 class PersonaTurnAgent:
-    """Speaks for one persona: its debate turns and stance updates."""
-
     def __init__(self, *, provider: LLMProvider) -> None:
         self._provider = provider
 
@@ -141,80 +114,58 @@ class PersonaTurnAgent:
         self,
         *,
         persona: PersonaModel,
-        cycle: Cycle,
         others: list[PersonaModel],
-        prior_turns: list[AgentTurn],
+        evidence: EvidenceSet,
+        focal_claim: str,
         turn_type: TurnType,
-        evidence: list[Paper],
-        recap: str | None = None,
+        prior_turns: list[AgentTurn],
+        cycle: int = 1,
+        assessment: DebateAssessment | None = None,
         cache_name: str | None = None,
-        steers: list[Steer] | None = None,
-    ) -> AgentTurn:
+    ) -> tuple[AgentTurn, TokenUsage]:
+        phase = PHASE[turn_type]
         names = {str(p.cluster_id): p.name for p in (persona, *others)}
-        user = build_turn_prompt(prior_turns, turn_type, names)
-        if turn_type == "respond":
-            user += "\n\n" + ACTION_PROMPT
-
-        steering = build_steering_block(steers, str(persona.cluster_id))
-        if steering:
-            user = steering + "\n\n" + user
-
-        if cache_name:
-            messages = [{"role": "user", "content": user}]
+        assessment_block = (
+            render_assessment(assessment)
+            if turn_type in ("respond", "refine") and assessment is not None
+            else None
+        )
+        body = build_debate_prompt(
+            phase,
+            focal_claim,
+            render_evidence(evidence),
+            render_agents(others),
+            render_turns(prior_turns, names),
+            assessment_block,
+            evidence_present=bool(evidence.snippets),
+            include_context=cache_name is None,
+        )
+        if cache_name is not None:
+            messages = [{"role": "user", "content": body}]
         else:
-            system = build_system_prompt(persona)
-            context = build_debate_context(cycle, others, evidence, recap)
             messages = [
-                {"role": "system", "content": system},
-                {"role": "user", "content": context + "\n\n" + user},
+                {"role": "system", "content": system_prompt(persona)},
+                {"role": "user", "content": body},
             ]
 
         result = await self._provider.generate_structured(
             messages=messages,
-            schema=AgentTurnInput,
+            schema=AgentResponse,
             cache_name=cache_name,
-            temperature=TEMP_BY_TURN[turn_type],
+            thinking_level="high",
         )
-        draft = result.parsed
-        return AgentTurn(
-            cycle_id=cycle.cycle_id,
+        response = result.parsed
+        if turn_type == "propose":
+            response.action = None
+            response.target_id = None
+        response.claim = clip(response.claim, CLAIM_LIMIT)
+        response.rationale = clip(response.rationale, RATIONALE_LIMIT)
+        response.message = clip(response.message, MESSAGE_LIMIT)
+
+        turn = AgentTurn(
             agent_id=str(persona.cluster_id),
-            turn_type=turn_type,
-            response_action=draft.response_action,
-            target_turn_id=draft.target_turn_id,
-            claim=draft.claim,
-            rationale=draft.rationale,
-            evidence=draft.evidence,
-            message=draft.message,
+            phase=phase,
+            cycle=cycle,
+            response=response,
         )
-
-    async def reflect(
-        self,
-        *,
-        persona: PersonaModel,
-        cycle: Cycle,
-        own_turns: list[AgentTurn],
-        prior_stance: Stance | None,
-        cache_name: str | None = None,
-    ) -> Stance:
-        user = build_reflect_prompt(persona, cycle, own_turns, prior_stance)
-
-        if cache_name:
-            messages = [{"role": "user", "content": user}]
-        else:
-            system = build_system_prompt(persona)
-            messages = [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ]
-
-        result = await self._provider.generate_structured(
-            messages=messages,
-            schema=Stance,
-            cache_name=cache_name,
-            temperature=REFLECT_TEMP,
-            thinking_disabled=True,
-        )
-        stance = result.parsed
-        stance.cycle_id = cycle.cycle_id
-        return stance
+        return turn, result.usage

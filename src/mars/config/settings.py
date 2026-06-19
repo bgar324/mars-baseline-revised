@@ -14,11 +14,12 @@ class GeminiSettings(BaseSettings):
 
     api_key: SecretStr
     model: str = "gemini-3-flash-preview"
-    temperature: float = Field(default=0.0, ge=0.0, le=2.0)
-    top_p: float = Field(default=0.95, ge=0.0, le=1.0)
-    top_k: int = Field(default=40, ge=1, le=100)
-    max_output_tokens: int = Field(default=8192, ge=100, le=8192)
-    thinking_level: str | None = None
+    temperature: float = Field(default=1.0, ge=0.0, le=2.0)
+    max_output_tokens: int = Field(default=8192, ge=100, le=32768)
+    thinking_level: str | None = "medium"
+    retry_attempts: int = Field(default=8, ge=1)
+    retry_initial_delay: float = Field(default=1.0, ge=0.0)
+    retry_max_delay: float = Field(default=60.0, ge=0.0)
 
 
 class DebateSettings(GeminiSettings):
@@ -29,9 +30,7 @@ class DebateSettings(GeminiSettings):
         extra="ignore",
     )
 
-    temperature: float = Field(default=0.2, ge=0.0, le=2.0)
-    max_output_tokens: int = Field(default=8192, ge=100, le=8192)
-    thinking_level: str | None = "low"
+    max_output_tokens: int = Field(default=32768, ge=100, le=32768)
 
 
 class LangExtractSettings(BaseSettings):

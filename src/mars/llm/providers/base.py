@@ -13,12 +13,10 @@ class ProviderType(str, Enum):
     GEMINI = "gemini"
 
 
-class ProviderError(Exception):
-    """Base error for provider failures."""
+class ProviderError(Exception): ...
 
 
-class LLMProviderError(ProviderError):
-    """Raised when an LLM provider call fails."""
+class LLMProviderError(ProviderError): ...
 
 
 class TokenUsage(BaseModel):
@@ -27,6 +25,9 @@ class TokenUsage(BaseModel):
     thinking_tokens: int = 0
     cached_tokens: int = 0
     total_tokens: int = 0
+
+    def __str__(self) -> str:
+        return f"in={self.input_tokens} out={self.output_tokens} cached={self.cached_tokens}"
 
 
 class LLMResponse(BaseModel):
@@ -46,13 +47,10 @@ class StructuredResponse(BaseModel, Generic[T]):
 
 
 class LLMProvider(ABC):
-    """Abstract base for conversational LLM providers."""
-
     name: ProviderType
 
     @abstractmethod
-    async def generate(self, *, messages: list[dict[str, str]]) -> LLMResponse:
-        """Generate a text response."""
+    async def generate(self, *, messages: list[dict[str, str]]) -> LLMResponse: ...
 
     @abstractmethod
     async def generate_structured(
@@ -63,29 +61,19 @@ class LLMProvider(ABC):
         cache_name: str | None = None,
         temperature: float | None = None,
         thinking_disabled: bool = False,
-    ) -> StructuredResponse[T]:
-        """Generate a response and parse it into the given schema.
-
-        ``temperature`` overrides the provider default for this one call.
-        ``cache_name`` reuses a previously cached prompt prefix.
-        ``thinking_disabled`` skips reasoning tokens for this call so the
-        full output budget goes to the structured response.
-        """
+        thinking_level: str | None = None,
+    ) -> StructuredResponse[T]: ...
 
     @abstractmethod
     async def create_cache(
         self, *, system_instruction: str, content: str, ttl_seconds: int = 3600
-    ) -> str:
-        """Store a reusable prompt prefix and return a handle to it."""
+    ) -> str: ...
 
     @abstractmethod
-    async def delete_cache(self, cache_name: str) -> None:
-        """Discard a stored prompt prefix."""
+    async def delete_cache(self, cache_name: str) -> None: ...
 
 
 class EmbeddingProvider(Protocol):
-    """Turns text into embedding vectors."""
-
     async def embed(self, text: str) -> np.ndarray: ...
 
     async def embed_batch(self, texts: list[str]) -> np.ndarray: ...

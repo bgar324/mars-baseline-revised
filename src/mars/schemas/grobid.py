@@ -6,20 +6,15 @@ Multipart = tuple[str | None, bytes, str | None]
 
 
 class File(SchemaBase):
-    """PDF file submitted to GROBID."""
-
     payload: bytes
     file_name: str | None = None
     mime_type: str | None = None
 
     def to_tuple(self) -> Multipart:
-        """Return the httpx multipart tuple for this file."""
         return self.file_name, self.payload, self.mime_type
 
 
 class Form(SchemaBase):
-    """processFulltextDocument form data."""
-
     file: File
     segment_sentences: bool | None = None
     consolidate_header: int | None = None
@@ -31,7 +26,6 @@ class Form(SchemaBase):
     @field_validator("consolidate_header", "consolidate_citations")
     @classmethod
     def validate_consolidate_values(cls, v: int | None) -> int | None:
-        """Validate consolidation levels are 0, 1, or 2."""
         if v is not None and v not in (0, 1, 2):
             raise ValueError("must be 0, 1, or 2")
         return v
@@ -39,7 +33,6 @@ class Form(SchemaBase):
     def to_files_and_data(
         self,
     ) -> tuple[dict[str, Multipart], dict[str, str]]:
-        """Split the form into httpx files and data mappings."""
         files: dict[str, Multipart] = {"input": self.file.to_tuple()}
         data: dict[str, str] = {}
 
@@ -67,8 +60,6 @@ class Form(SchemaBase):
 
 
 class Response(SchemaBase):
-    """GROBID API response."""
-
     status_code: int
     content: bytes
     content_type: str | None = None

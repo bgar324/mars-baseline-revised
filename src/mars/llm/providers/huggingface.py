@@ -32,12 +32,6 @@ def _load_with_retry(
 
 
 class HuggingFaceProvider:
-    """Local HuggingFace transformer model for embedding text.
-
-    NOTE: For SPECTER2 base, outputs are within the vector space as S2's
-    specter_v2 field.
-    """
-
     def __init__(
         self,
         model_name: str,

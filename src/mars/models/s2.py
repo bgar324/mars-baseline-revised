@@ -2,15 +2,11 @@ from pydantic import BaseModel, Field
 
 
 class Author(BaseModel):
-    """Author as embedded in a paper record."""
-
     id: str | None = None
     name: str
 
 
 class AuthorDetail(BaseModel):
-    """Full author profile from the author endpoints."""
-
     id: str
     name: str
     url: str | None = None
@@ -22,15 +18,11 @@ class AuthorDetail(BaseModel):
 
 
 class FieldOfStudy(BaseModel):
-    """A topical category assigned to a paper by Semantic Scholar or an external source."""
-
     category: str
     source: str | None = None
 
 
 class PublicationVenue(BaseModel):
-    """The journal, conference, or preprint server where a paper appeared."""
-
     id: str | None = None
     name: str | None = None
     type: str | None = None
@@ -39,8 +31,6 @@ class PublicationVenue(BaseModel):
 
 
 class Paper(BaseModel):
-    """Scholarly paper."""
-
     id: str
     title: str
     corpus_id: int | None = None
@@ -68,8 +58,6 @@ class Paper(BaseModel):
 
 
 class CitationEdge(BaseModel):
-    """A citation or reference link to a related paper."""
-
     paper: Paper
     contexts: list[str] = Field(default_factory=list)
     intents: list[str] = Field(default_factory=list)
@@ -77,15 +65,11 @@ class CitationEdge(BaseModel):
 
 
 class TextSpan(BaseModel):
-    """Character offset range within a source text."""
-
     start: int
     end: int
 
 
 class Snippet(BaseModel):
-    """A text passage extracted from a paper."""
-
     text: str
     paper: Paper
     kind: str | None = None

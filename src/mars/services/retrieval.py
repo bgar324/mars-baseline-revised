@@ -19,8 +19,6 @@ AnchorMode = Literal["search", "snippets"]
 
 
 class RetrievalService:
-    """Pipeline stage service for literature retrieval."""
-
     def __init__(
         self,
         *,
@@ -138,7 +136,6 @@ async def expand_corpus(
     papers: list[Paper],
     config: RetrievalConfig,
 ) -> list[Paper]:
-    """Grow a thin candidate set with recommended neighbors until it hits the target size."""
     corpus = deduplicate(papers)
     if config.expansion_rounds <= 0 or len(corpus) >= config.target_corpus_size:
         return corpus[: config.retrieval_budget]
@@ -179,7 +176,6 @@ async def retrieve_literature(
     client: SemanticScholarClient,
     config: RetrievalConfig | None = None,
 ) -> list[Paper]:
-    """Retrieve candidate papers from Query Expansion outputs."""
     cfg = config or RetrievalConfig()
     anchors = build_anchors(extracted, expansion, questions)
     candidates = await retrieve_candidates(client, anchors, cfg)

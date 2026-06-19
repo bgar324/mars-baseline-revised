@@ -18,11 +18,10 @@ from mars.llm.providers.base import (
 T = TypeVar("T", bound=BaseModel)
 
 
-def build_thinking_config(cfg: GeminiSettings) -> types.ThinkingConfig | None:
-    if not cfg.thinking_level:
+def build_thinking_config(level: str | None) -> types.ThinkingConfig | None:
+    if not level:
         return None
-    level = getattr(types.ThinkingLevel, cfg.thinking_level.upper())
-    return types.ThinkingConfig(thinking_level=level)
+    return types.ThinkingConfig(thinking_level=getattr(types.ThinkingLevel, level.upper()))
 
 
 def prepare_contents(
@@ -67,12 +66,19 @@ def extract_finish_reason(response: Any) -> str | None:
 
 
 class GeminiProvider(LLMProvider):
-    """Adapter for the Google GenAI SDK."""
-
     name = ProviderType.GEMINI
 
     def __init__(self, *, api_key: str, config: GeminiSettings) -> None:
-        self._client = genai.Client(api_key=api_key)
+        self._client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(
+                retry_options=types.HttpRetryOptions(
+                    attempts=config.retry_attempts,
+                    initial_delay=config.retry_initial_delay,
+                    max_delay=config.retry_max_delay,
+                ),
+            ),
+        )
         self._config = config
 
     @classmethod
@@ -87,18 +93,17 @@ class GeminiProvider(LLMProvider):
         *,
         temperature: float | None = None,
         thinking_disabled: bool = False,
+        thinking_level: str | None = None,
         **extra: Any,
     ) -> types.GenerateContentConfig:
         cfg = self._config
         kwargs: dict[str, Any] = dict(
             max_output_tokens=cfg.max_output_tokens,
             temperature=cfg.temperature if temperature is None else temperature,
-            top_p=cfg.top_p,
-            top_k=cfg.top_k,
             **extra,
         )
         if not thinking_disabled:
-            thinking_config = build_thinking_config(cfg)
+            thinking_config = build_thinking_config(thinking_level or cfg.thinking_level)
             if thinking_config is not None:
                 kwargs["thinking_config"] = thinking_config
         return types.GenerateContentConfig(**kwargs)
@@ -109,6 +114,7 @@ class GeminiProvider(LLMProvider):
         *,
         temperature: float | None = None,
         thinking_disabled: bool = False,
+        thinking_level: str | None = None,
         **config_extra: Any,
     ) -> Any:
         system_instruction, contents = prepare_contents(messages)
@@ -118,6 +124,7 @@ class GeminiProvider(LLMProvider):
         gen_config = self._build_config(
             temperature=temperature,
             thinking_disabled=thinking_disabled,
+            thinking_level=thinking_level,
             **extra,
         )
         try:
@@ -151,6 +158,7 @@ class GeminiProvider(LLMProvider):
         cache_name: str | None = None,
         temperature: float | None = None,
         thinking_disabled: bool = False,
+        thinking_level: str | None = None,
     ) -> StructuredResponse[T]:
         extra: dict[str, Any] = {
             "response_mime_type": "application/json",
@@ -162,6 +170,7 @@ class GeminiProvider(LLMProvider):
             messages,
             temperature=temperature,
             thinking_disabled=thinking_disabled,
+            thinking_level=thinking_level,
             **extra,
         )
         finish_reason = extract_finish_reason(response)

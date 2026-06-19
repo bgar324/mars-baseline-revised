@@ -94,13 +94,9 @@ class DebateEventType(str, Enum):
     DEBATE_STARTED = "debate.started"
     CYCLE_STARTED = "cycle.started"
     TURN_PRODUCED = "turn.produced"
+    CYCLE_ASSESSED = "cycle.assessed"
+    CYCLE_ADJUDICATED = "cycle.adjudicated"
     CYCLE_SYNTHESIZED = "cycle.synthesized"
-    STANCE_UPDATED = "stance.updated"
-    CYCLE_AWAITING = "cycle.awaiting"
-    HYPOTHESIS_ACCEPTED = "hypothesis.accepted"
-    CYCLE_CLOSED = "cycle.closed"
-    CYCLE_BRANCHED = "cycle.branched"
-    CORPUS_EXPANDED = "corpus.expanded"
 
 
 class DebateEvent(BaseModel):

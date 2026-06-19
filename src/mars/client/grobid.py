@@ -14,19 +14,11 @@ _ERROR_CODES = {
 
 
 class GrobidError(Exception):
-    """Raised when GROBID rejects a request or fails to process it."""
+    ...
 
 
 class GrobidClient(BaseClient):
-    """Submit PDFs to GROBID and parse the TEI response."""
-
     async def parse_pdf(self, form: Form) -> Article:
-        """Process a PDF through GROBID and return the parsed Article.
-
-        Raises:
-            GrobidError: If GROBID returns a known error status code.
-            ParserError: If the returned TEI document is malformed.
-        """
         await self._rate_limiter.wait()
 
         files, data = form.to_files_and_data()
@@ -48,7 +40,6 @@ class GrobidClient(BaseClient):
         return Parser(response.content).parse()
 
     async def fetch(self, **kwargs: Any) -> Article:
-        """Process a PDF through GROBID. Expects a `form` keyword argument."""
         form = kwargs["form"]
         if not isinstance(form, Form):
             raise TypeError("fetch() requires a `form` of type Form")

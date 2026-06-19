@@ -22,15 +22,15 @@ from mars.services.retrieval import RetrievalService
 
 
 class PipelineError(Exception):
-    """Base error for pipeline operations."""
+    ...
 
 
 class NotFoundError(PipelineError):
-    """Raised when a query or stage artifact does not exist."""
+    ...
 
 
 class PrerequisiteError(PipelineError):
-    """Raised when a stage is run before its upstream stages complete."""
+    ...
 
 
 def _now() -> datetime:
@@ -53,11 +53,6 @@ def _summary(stage: StageName, result: Any) -> dict[str, Any]:
 
 
 class PipelineService:
-    """Orchestrates the pipeline stages, tracks per-query state, emits events.
-
-    State is held in memory: a process singleton owns one of these.
-    """
-
     def __init__(
         self,
         *,
@@ -76,7 +71,6 @@ class PipelineService:
         self._subscribers: dict[str, set[asyncio.Queue[PipelineEvent]]] = {}
 
     async def create_query(self, text: str) -> PipelineState:
-        """Register a new query and run the EXTRACT and EXPAND stages."""
         query_id = uuid4().hex
         now = _now()
         self._states[query_id] = PipelineState(
@@ -97,7 +91,6 @@ class PipelineService:
         return self._states[query_id]
 
     async def run_stage(self, query_id: str, stage: StageName) -> PipelineState:
-        """Run one stage, after checking prerequisites. Idempotent."""
         state = self._require(query_id)
         for dep in PIPELINE_GRAPH[stage]:
             if state.stages[dep].status is not StageStatus.COMPLETE:
@@ -131,7 +124,6 @@ class PipelineService:
         return state
 
     async def subscribe(self, query_id: str) -> AsyncIterator[PipelineEvent]:
-        """Yield pipeline events for a query until the caller disconnects."""
         self._require(query_id)
         queue: asyncio.Queue[PipelineEvent] = asyncio.Queue()
         self._subscribers.setdefault(query_id, set()).add(queue)

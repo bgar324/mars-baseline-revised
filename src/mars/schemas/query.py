@@ -60,8 +60,6 @@ class HypotheticalQuestions(BaseModel):
 
 
 class RetrievalAnchors(BaseModel):
-    """Query strings used to retrieve candidate papers."""
-
     construct_queries: list[str] = Field(
         description="One query per construct, joining the construct with "
         "its expansions to widen recall"

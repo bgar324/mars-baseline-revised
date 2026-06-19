@@ -11,11 +11,6 @@ def build_knn(
     k: int,
     symmetrize_mode: str = "max",
 ) -> sp.csr_matrix:
-    """Build a symmetric kNN affinity graph from a feature matrix.
-
-    Edge weights are cosine affinities (1 - cosine distance) clipped to [0, 1],
-    with a zero diagonal.
-    """
     n = int(features.shape[0])
     neighbors = NearestNeighbors(n_neighbors=k + 1, metric="cosine").fit(features)
     distances, indices = neighbors.kneighbors(features, return_distance=True)
@@ -35,7 +30,6 @@ def build_knn(
 
 
 def symmetrize(directed: sp.csr_matrix, mode: str) -> sp.csr_matrix:
-    """Convert a directed kNN graph into an undirected adjacency."""
     if mode == "max":
         return directed.maximum(directed.T).tocsr()
     if mode == "mean":

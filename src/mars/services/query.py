@@ -22,8 +22,6 @@ QUESTION_TEMP = 0.4
 
 
 class QueryService:
-    """Pipeline stage service for semantic role labeling, term expansion, hypothetical questions."""
-
     def __init__(
         self,
         *,
@@ -34,7 +32,6 @@ class QueryService:
         self._gemini = gemini
 
     async def extract(self, query: str) -> ExtractedQuery:
-        """Semantic role labeling and declarative-claim synthesis."""
         result = await self._langextract.extract(query)
         spans = srl_to_spans(result)
         claim = await self._synthesize_claim(query, spans)
@@ -60,7 +57,6 @@ class QueryService:
     async def expand(
         self, extracted: ExtractedQuery
     ) -> tuple[QueryExpansion, HypotheticalQuestions]:
-        """Term expansion + hypothetical-question generation."""
         constructs = [
             (s.id, s.text) for s in extracted.spans if s.role == SemanticRole.CONSTRUCT
         ]
@@ -117,7 +113,6 @@ ID_PREFIX = {"domain": "d", "goal": "g", "construct": "c", "claim": "claim"}
 
 
 def srl_to_spans(result) -> list[QuerySpan]:
-    """Map a langextract AnnotatedDocument into role-labeled QuerySpans."""
     spans: list[QuerySpan] = []
     counters = {role: 0 for role in ROLE_MAP}
     for ext in result.extractions:

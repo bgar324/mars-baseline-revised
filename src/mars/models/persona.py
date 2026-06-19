@@ -25,8 +25,6 @@ EvaluationLens = Literal[
 
 
 class PersonaSynthesis(BaseModel):
-    """Schema the synthesizer fills in. methods_summary leads as a reasoning scratchpad."""
-
     methods_summary: str = Field(
         description=(
             "Cluster-level summary of common study designs, data modalities, "

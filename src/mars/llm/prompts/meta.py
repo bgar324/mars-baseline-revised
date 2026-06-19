@@ -9,7 +9,7 @@ methods_summary is a private scratchpad. Here, and ONLY here, you may name speci
 Specific dataset names (e.g. ELSA, KNHANES), named indices or frameworks (e.g. Area Deprivation Index, allostatic load, Oaxaca-Blinder decomposition), and specific statistical techniques stay in methods_summary ONLY. The name, framing, background, and instructions must be field-level and contain none of them.
 
 # THEN SYNTHESIZE (the identity — must survive +5 typical papers)
-- name: format as "{Field} · {Facet}" — the broadest accurate discipline label, a middle dot, then the cluster's single distinguishing facet (its method, lens, scale, or subfocus). Keep both parts short (whole name <= 6 words), e.g. "Social Epidemiologist · Life-Course". The facet is what sets this community apart from same-field neighbors; never put datasets or named indices in it.
+- name: format as "{Field} · {Facet}" — the broadest accurate discipline label, a middle dot, then the cluster's single most distinguishing facet. Keep both parts short (whole name <= 6 words), e.g. "Social Epidemiologist · Life-Course". Choose the facet that most sharply separates THIS cluster from any other cluster in the same field: prefer the specific mechanism, lens, scale, or sub-process the sample papers share (e.g. "Outlier-Dimension Geometry", "Retrieval Grounding") over a generic restatement of the field (avoid bare "Alignment", "Methods", "Modeling"). If two facets fit, pick the one a researcher would least expect to apply to a neighboring cluster. Never put datasets or named indices in it.
 - framing: one sentence on how this community frames the focal claim; name the claim's key variables and at most one high-level methodological anchor (e.g. "longitudinal cohorts"). No paradigms, datasets, or parameterizations.
 - background: 1-3 sentences on the methodological tradition and evidence base at the FAMILY level (e.g. "longitudinal cohorts and rodent stress paradigms; neuroimaging, endocrine and immune markers"). Name families of designs and measures, never specific datasets or named indices.
 - reasoning_style: HOW this community produces evidence, not what it studies.
@@ -116,11 +116,18 @@ CORRECT — specifics confined to methods_summary; identity stays field-level:
 }"""
 
 
-def build_meta_prompt(focal_claim: str, cluster_summary: str) -> str:
+def build_meta_cache_block(focal_claim: str) -> str:
     return (
         "Synthesize the cluster below into one debating persona.\n\n"
-        f"FOCAL CLAIM: {focal_claim}\n\n"
-        f"{cluster_summary}\n\n"
         f"{EXAMPLES}\n\n"
-        "NOW SYNTHESIZE\nOutput:"
+        "NOW SYNTHESIZE\n\n"
+        f"FOCAL CLAIM: {focal_claim}"
     )
+
+
+def build_meta_cluster_block(cluster_summary: str) -> str:
+    return f"{cluster_summary}\n\nOutput:"
+
+
+def build_meta_prompt(focal_claim: str, cluster_summary: str) -> str:
+    return f"{build_meta_cache_block(focal_claim)}\n\n{build_meta_cluster_block(cluster_summary)}"

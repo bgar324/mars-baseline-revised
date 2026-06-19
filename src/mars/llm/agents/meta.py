@@ -4,7 +4,11 @@ from typing import Any
 import numpy as np
 
 from mars.llm.agents.base import BaseAgent
-from mars.llm.prompts.meta import SYSTEM_INSTRUCTION, build_meta_prompt
+from mars.llm.prompts.meta import (
+    SYSTEM_INSTRUCTION,
+    build_meta_cluster_block,
+    build_meta_prompt,
+)
 from mars.models.persona import PersonaAgent as PersonaModel
 from mars.models.persona import PersonaSynthesis
 from mars.models.s2 import Paper
@@ -14,10 +18,9 @@ K_CITED = 5
 K_CENTRAL = 5
 
 
-def select_representative(
+def blend_papers(
     papers: list[Paper], k_cited: int = K_CITED, k_central: int = K_CENTRAL
 ) -> list[Paper]:
-    """Blend the highest-cited papers with those closest to the cluster centroid."""
     embedded = [p for p in papers if p.specter_v2 is not None]
     if not embedded:
         return sorted(papers, key=lambda p: p.citation_count or 0, reverse=True)[
@@ -45,8 +48,7 @@ def select_representative(
 
 
 def format_cluster(papers: list[Paper]) -> str:
-    """Render representative papers plus cluster-level breadth signals for the prompt."""
-    selected = select_representative(papers)
+    selected = blend_papers(papers)
     fields = Counter(f for p in papers for f in (p.fields_of_study or []))
     ptypes = Counter(t for p in papers for t in (p.publication_types or []))
     years = [p.year for p in papers if p.year]
@@ -66,8 +68,6 @@ def format_cluster(papers: list[Paper]) -> str:
 
 
 class PersonaAgent(BaseAgent[PersonaSynthesis]):
-    """Synthesizes one paper cluster into a debating persona."""
-
     name: str = "persona_synthesis"
     role: str = "Synthesizes a citation-grounded paper cluster into a debating persona."
     system_instruction: str = SYSTEM_INSTRUCTION
@@ -82,8 +82,14 @@ class PersonaAgent(BaseAgent[PersonaSynthesis]):
         return PersonaSynthesis
 
     async def run(self, context: dict[str, Any]) -> PersonaModel:
-        prompt = self.build_input(context)
-        result = await self._with_retries(lambda: self._generate(prompt))
+        cache_name = context.get("cache_name")
+        if cache_name:
+            prompt = build_meta_cluster_block(format_cluster(context["cluster_papers"]))
+        else:
+            prompt = self.build_input(context)
+        result = await self._with_retries(
+            lambda: self._generate(prompt, cache_name=cache_name)
+        )
         draft: PersonaSynthesis = result.parsed
 
         references = [

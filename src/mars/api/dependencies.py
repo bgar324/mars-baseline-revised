@@ -3,7 +3,6 @@ from functools import lru_cache
 from mars.client.s2 import SemanticScholarClient
 from mars.config.settings import AppSettings, DebateSettings
 from mars.llm.providers.gemini import GeminiProvider
-from mars.llm.providers.huggingface import HuggingFaceProvider
 from mars.llm.providers.langextract import LangExtractProvider
 from mars.services.cluster import ClusterService
 from mars.services.debate import DebateService
@@ -33,15 +32,6 @@ def get_s2() -> SemanticScholarClient:
 @lru_cache(maxsize=1)
 def get_langextract() -> LangExtractProvider:
     return LangExtractProvider(_settings.langextract)
-
-
-@lru_cache(maxsize=1)
-def get_embedding_provider() -> HuggingFaceProvider:
-    token = _settings.huggingface.token
-    return HuggingFaceProvider(
-        model_name=_settings.huggingface.model_name,
-        token=token.get_secret_value() if token else None,
-    )
 
 
 def get_query_service() -> QueryService:
@@ -81,6 +71,6 @@ def get_debate_provider() -> GeminiProvider:
 def get_debate_service() -> DebateService:
     return DebateService(
         llm=get_debate_provider(),
-        embedder=get_embedding_provider(),
         s2=get_s2(),
+        retrieval_filters={"minCitationCount": _settings.pipeline.retrieval.min_citation_count},
     )

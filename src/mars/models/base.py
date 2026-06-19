@@ -4,8 +4,6 @@ from typing import Any
 
 
 class RecordMixin:
-    """Map plain record data into domain models."""
-
     @staticmethod
     def _dt(record: Mapping[str, Any], key: str) -> datetime:
         value = record[key]

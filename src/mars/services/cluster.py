@@ -16,8 +16,6 @@ from mars.pipeline.cluster.umap import reduce
 
 
 class ClusterService:
-    """Pipeline stage service for clustering retrieved papers."""
-
     def __init__(self, *, config: ClusterConfig | None = None) -> None:
         self._config = config
 
@@ -29,12 +27,6 @@ def cluster_papers(
     papers: list[Paper],
     config: ClusterConfig | None = None,
 ) -> dict[int, list[Paper]]:
-    """Cluster papers into epistemic communities via UMAP + HDBSCAN or Leiden.
-
-    Returns a mapping of cluster id to papers. Key -1 is the noise cluster
-    (HDBSCAN only; Leiden assigns every paper). Papers without a SPECTER2
-    embedding are dropped.
-    """
     cfg = config or ClusterConfig()
 
     embedded = [p for p in papers if p.specter_v2 is not None]
@@ -67,7 +59,6 @@ def cluster_papers(
 def cluster_hdbscan(
     projection: np.ndarray, cfg: ClusterConfig, n_papers: int
 ) -> np.ndarray:
-    """Density-cluster the projection with HDBSCAN; label -1 is noise."""
     mcs = resolve_mcs(cfg.hdbscan, n_papers)
     return hdbscan.HDBSCAN(
         min_cluster_size=mcs,
@@ -78,11 +69,6 @@ def cluster_hdbscan(
 
 
 def cluster_leiden(projection: np.ndarray, cfg: ClusterConfig) -> np.ndarray:
-    """Community-detect the projection via a kNN graph and Leiden.
-
-    Every paper is assigned a community; communities smaller than the
-    configured minimum are merged into their nearest surviving community.
-    """
     k = min(cfg.knn.k, int(projection.shape[0]) - 1)
     adjacency = build_knn(projection, k=k, symmetrize_mode=cfg.knn.symmetrize_mode)
     membership = leiden_partition(
@@ -98,7 +84,6 @@ def cluster_leiden(projection: np.ndarray, cfg: ClusterConfig) -> np.ndarray:
 def enforce_min_cluster_size(
     labels: np.ndarray, coords: np.ndarray, mcs: int
 ) -> np.ndarray:
-    """Merge undersized communities into their nearest surviving centroid."""
     labels = labels.copy()
     counts = Counter(labels.tolist())
     large = [c for c, n in counts.items() if n >= mcs]
@@ -114,7 +99,6 @@ def enforce_min_cluster_size(
 
 
 def relabel_contiguous(labels: np.ndarray) -> np.ndarray:
-    """Remap cluster ids to a contiguous range starting at 0."""
     out = labels.copy()
     remap: dict[int, int] = {}
     for old in sorted(set(labels.tolist())):
@@ -125,7 +109,6 @@ def relabel_contiguous(labels: np.ndarray) -> np.ndarray:
 
 
 def l2_normalize(matrix: np.ndarray) -> np.ndarray:
-    """L2-normalize rows of an embedding matrix."""
     norms = np.linalg.norm(matrix, axis=1, keepdims=True)
     if float(norms.min()) <= 0.0:
         raise ValueError("zero-norm vector in embedding matrix")
@@ -133,17 +116,11 @@ def l2_normalize(matrix: np.ndarray) -> np.ndarray:
 
 
 def center_and_normalize(matrix: np.ndarray) -> np.ndarray:
-    """Center on the matrix mean, then L2-normalize.
-
-    Removes the dominant direction shared by all papers in a topic-filtered
-    subset, exposing within-topic variance for density-based clustering.
-    """
     centered = matrix - matrix.mean(axis=0)
     return l2_normalize(centered)
 
 
 def normalize_embeddings(matrix: np.ndarray, mode: Normalization) -> np.ndarray:
-    """Dispatch to the configured normalization strategy."""
     if mode is Normalization.L2:
         return l2_normalize(matrix)
     if mode is Normalization.CENTER_L2:

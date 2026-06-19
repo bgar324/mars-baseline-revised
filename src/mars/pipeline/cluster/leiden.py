@@ -12,7 +12,6 @@ def leiden_partition(
     seed: int | None,
     use_weights: bool,
 ) -> np.ndarray:
-    """Assign every node to a community with Leiden on an affinity graph."""
     graph = to_igraph(adjacency, use_weights=use_weights)
     partition = run_leiden(
         graph,
@@ -25,7 +24,6 @@ def leiden_partition(
 
 
 def to_igraph(adjacency: sp.csr_matrix, *, use_weights: bool):
-    """Convert the upper triangle of an adjacency to an undirected igraph graph."""
     try:
         import igraph as ig
     except ImportError as e:
@@ -49,7 +47,6 @@ def run_leiden(
     seed: int | None,
     use_weights: bool,
 ):
-    """Run Leiden with a resolution-based configuration model partition."""
     try:
         import leidenalg
     except ImportError as e:

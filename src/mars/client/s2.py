@@ -97,12 +97,10 @@ _BATCH_LIMIT = 500
 
 
 class SemanticScholarError(Exception):
-    """Raised when the Semantic Scholar API fails or rejects a request."""
+    ...
 
 
 class SemanticScholarClient(BaseClient):
-    """Async client for the Semantic Scholar Academic Graph API."""
-
     def __init__(self, config: ClientConfig) -> None:
         super().__init__(config)
         if config.api_key is None:
@@ -115,7 +113,6 @@ class SemanticScholarClient(BaseClient):
     def from_env(
         cls, settings: SemanticScholarSettings | None = None
     ) -> "SemanticScholarClient":
-        """Build a client from SEMANTIC_SCHOLAR_API_KEY and .env settings."""
         settings = settings or SemanticScholarSettings()
         return cls(
             ClientConfig(
@@ -127,14 +124,12 @@ class SemanticScholarClient(BaseClient):
         )
 
     def auth_headers(self) -> dict[str, str]:
-        """Add the x-api-key header when an API key is configured."""
         if self.config.api_key is not None:
             return {"x-api-key": self.config.api_key.get_secret_value()}
         return {}
 
     @staticmethod
     def _normalize_id(identifier: str) -> str:
-        """Map a paper identifier to a Semantic Scholar-supported form."""
         s = identifier.strip()
         low = s.lower()
 
@@ -167,7 +162,6 @@ class SemanticScholarClient(BaseClient):
         params: dict[str, Any] | None = None,
         json: Any | None = None,
     ) -> Any | None:
-        """Send a request with rate limiting and retry on 429/5xx."""
         clean_params = (
             {k: v for k, v in params.items() if v is not None} if params else None
         )
@@ -316,7 +310,6 @@ class SemanticScholarClient(BaseClient):
         )
 
     async def get_paper(self, identifier: str) -> Paper | None:
-        """Fetch a single paper by any supported identifier."""
         paper_id = self._normalize_id(identifier)
         data = await self._request(
             "GET", f"/graph/v1/paper/{paper_id}", params={"fields": _PAPER_FIELDS}
@@ -326,7 +319,6 @@ class SemanticScholarClient(BaseClient):
     async def search(
         self, query: str, *, limit: int = 10, offset: int = 0, **filters: Any
     ) -> list[Paper]:
-        """Relevance-ranked paper search."""
         params = {
             "query": query,
             "limit": min(limit, _SEARCH_LIMIT),
@@ -338,7 +330,6 @@ class SemanticScholarClient(BaseClient):
         return [self._parse_paper(p) for p in (data or {}).get("data", [])]
 
     async def match(self, title: str, **filters: Any) -> Paper | None:
-        """Return the single closest paper by title, if any."""
         params = {"query": title, "fields": _PAPER_FIELDS, **filters}
         data = await self._request("GET", "/graph/v1/paper/search/match", params=params)
         if not data:
@@ -349,7 +340,6 @@ class SemanticScholarClient(BaseClient):
     async def get_citations(
         self, identifier: str, *, limit: int = _PAGE_LIMIT
     ) -> list[CitationEdge]:
-        """Fetch papers that cite the given paper."""
         paper_id = self._normalize_id(identifier)
         return await self._collect_edges(
             f"/graph/v1/paper/{paper_id}/citations", "citingPaper", limit
@@ -358,7 +348,6 @@ class SemanticScholarClient(BaseClient):
     async def get_references(
         self, identifier: str, *, limit: int = _PAGE_LIMIT
     ) -> list[CitationEdge]:
-        """Fetch papers cited by the given paper."""
         paper_id = self._normalize_id(identifier)
         return await self._collect_edges(
             f"/graph/v1/paper/{paper_id}/references", "citedPaper", limit
@@ -393,7 +382,6 @@ class SemanticScholarClient(BaseClient):
         return edges[:limit]
 
     async def batch_papers(self, ids: list[str]) -> list[Paper]:
-        """Fetch details for many papers at once (chunked at 500 ids)."""
         papers: list[Paper] = []
         for start in range(0, len(ids), _BATCH_LIMIT):
             chunk = [self._normalize_id(i) for i in ids[start : start + _BATCH_LIMIT]]
@@ -413,11 +401,6 @@ class SemanticScholarClient(BaseClient):
         negative_paper_ids: list[str] | None = None,
         limit: int = 100,
     ) -> list[Paper]:
-        """Papers recommended from liked/disliked seeds, hydrated with full fields.
-
-        The recommendations endpoint rejects fields like tldr and the SPECTER2
-        embedding, so it returns ids only; batch_papers then hydrates them.
-        """
         data = await self._request(
             "POST",
             "/recommendations/v1/papers/",
@@ -439,22 +422,27 @@ class SemanticScholarClient(BaseClient):
         return await self.batch_papers(ids)
 
     async def search_snippets(
-        self, query: str, *, limit: int = 10, **filters: Any
+        self,
+        query: str,
+        *,
+        limit: int = 10,
+        paper_ids: list[str] | None = None,
+        **filters: Any,
     ) -> list[Snippet]:
-        """Passage-level text search across the corpus."""
-        params = {
+        params: dict[str, Any] = {
             "query": query,
             "limit": min(limit, _PAGE_LIMIT),
             "fields": _SNIPPET_FIELDS,
             **filters,
         }
+        if paper_ids:
+            params["paperIds"] = ",".join(self._normalize_id(p) for p in paper_ids[:100])
         data = await self._request("GET", "/graph/v1/snippet/search", params=params)
         return [self._parse_snippet(it) for it in (data or {}).get("data", [])]
 
     async def search_authors(
         self, query: str, *, limit: int = 10, offset: int = 0
     ) -> list[AuthorDetail]:
-        """Search for authors by name."""
         params = {
             "query": query,
             "limit": min(limit, _SEARCH_LIMIT),
@@ -465,7 +453,6 @@ class SemanticScholarClient(BaseClient):
         return [self._parse_author_detail(a) for a in (data or {}).get("data", [])]
 
     async def get_author(self, author_id: str) -> AuthorDetail | None:
-        """Fetch a single author profile."""
         data = await self._request(
             "GET",
             f"/graph/v1/author/{author_id}",
@@ -476,7 +463,6 @@ class SemanticScholarClient(BaseClient):
     async def get_author_papers(
         self, author_id: str, *, limit: int = _PAGE_LIMIT
     ) -> list[Paper]:
-        """Fetch all papers by a given author."""
         papers: list[Paper] = []
         offset = 0
         while len(papers) < limit:
@@ -504,7 +490,6 @@ class SemanticScholarClient(BaseClient):
         return papers[:limit]
 
     async def fetch(self, **kwargs: Any) -> list[Paper]:
-        """Run a paper search. Expects a `query` keyword argument."""
         query = kwargs.get("query")
         if not isinstance(query, str):
             raise TypeError("fetch() requires a `query` keyword argument")

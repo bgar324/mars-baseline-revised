@@ -58,12 +58,6 @@ Questions:"""
 
 
 def build_question_prompt(constructs: list[str], domain: str, claim: str | None) -> str:
-    """Build the hypothetical question generation prompt.
-
-    constructs is the list of construct texts.
-    domain is the resolved domain from QueryExpansion.
-    claim is the asserted claim text, or None if the query had no claim.
-    """
     return QUESTION_PROMPT.format(
         domain=domain,
         constructs=", ".join(constructs),

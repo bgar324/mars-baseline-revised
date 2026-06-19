@@ -12,7 +12,6 @@ def reduce(
     metric: str,
     random_state: int | None,
 ) -> np.ndarray:
-    """Project an embedding matrix to a lower-dimensional space with UMAP."""
     import umap
 
     reducer = umap.UMAP(

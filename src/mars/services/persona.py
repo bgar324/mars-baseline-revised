@@ -1,14 +1,18 @@
 import asyncio
+import logging
 
 from mars.llm.agents.meta import PersonaAgent
+from mars.llm.prompts.meta import SYSTEM_INSTRUCTION, build_meta_cache_block
 from mars.llm.providers.base import LLMProvider
 from mars.models.persona import PersonaAgent as PersonaModel
 from mars.models.s2 import Paper
 
+logger = logging.getLogger(__name__)
+
+CACHE_TTL_SECONDS = 600
+
 
 class PersonaService:
-    """Pipeline stage service for persona synthesis and instantiation."""
-
     def __init__(self, *, gemini: LLMProvider) -> None:
         self._gemini = gemini
 
@@ -36,23 +40,41 @@ async def synthesize_personas(
     }
 
     agent = PersonaAgent(provider=provider)
-    personas = await asyncio.gather(
-        *(
-            agent.run(
-                {
-                    "cluster_id": cid,
-                    "cluster_papers": papers,
-                    "focal_claim": focal_claim,
-                }
+
+    cache_name: str | None = None
+    if len(eligible) >= 2:
+        try:
+            cache_name = await provider.create_cache(
+                system_instruction=SYSTEM_INSTRUCTION,
+                content=build_meta_cache_block(focal_claim),
+                ttl_seconds=CACHE_TTL_SECONDS,
             )
-            for cid, papers in eligible.items()
+        except Exception as exc:
+            logger.warning("persona cache creation failed, running uncached: %s", exc)
+            cache_name = None
+
+    try:
+        personas = await asyncio.gather(
+            *(
+                agent.run(
+                    {
+                        "cluster_id": cid,
+                        "cluster_papers": papers,
+                        "focal_claim": focal_claim,
+                        "cache_name": cache_name,
+                    }
+                )
+                for cid, papers in eligible.items()
+            )
         )
-    )
+    finally:
+        if cache_name:
+            await provider.delete_cache(cache_name)
+
     return ensure_distinct_names(list(personas))
 
 
 def ensure_distinct_names(personas: list[PersonaModel]) -> list[PersonaModel]:
-    """Break the rare tie when two personas land on the same name."""
     seen: set[str] = set()
     for persona in personas:
         key = persona.name.strip().lower()
