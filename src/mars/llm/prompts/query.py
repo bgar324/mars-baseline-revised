@@ -1,61 +1,22 @@
-SYSTEM_INSTRUCTION = """You are a scholarly information retrieval specialist. \
-Given the constructs from a research query, perform two tasks:
+SYSTEM_INSTRUCTION = """Given a research query's constructs, do two things:
 
-1. Identify the scholarly domain the query operates in. If a domain is \
-provided, use it. If the domain is unspecified, infer the most likely \
-scholarly field from the constructs themselves.
+1. State the scholarly domain. Use the provided domain; if none is provided, infer the most likely field from the constructs.
+2. For each construct, write 5 to 8 related terms that broaden the literature search: academic synonyms, standard technical terms, or alternative phrasings authors use for the same idea.
 
-2. For each construct, generate 5 to 8 semantically related terms that \
-broaden coverage of the academic literature search space.
-
-Each expansion term should be one of the following:
-- A synonymous expression used in academic writing for the same concept
-- A standard technical term associated with the construct
-- An alternative phrasing authors use to refer to the same idea
-
-Stay within each construct's conceptual neighborhood. Preserve specificity. \
-Use terminology appropriate to the domain.
-
-Return valid JSON conforming to the response schema."""
+Write each term at the same level of specificity as the construct. Use terminology from the stated domain."""
 
 
-EXPANSION_PROMPT = """Identify the scholarly domain and expand each construct \
-with 5 to 8 semantically related terms.
+EXPANSION_PROMPT = """State the scholarly domain and write 5 to 8 related terms for each construct.
 
 EXAMPLES
 
 Construct: chronic stress
 Domain: psychoneuroimmunology
-Expansions:
-- psychological stress
-- prolonged stress exposure
-- persistent stressor
-- HPA axis activation
-- allostatic load
-- cortisol elevation
-- long-term stress
-
-Construct: working memory
-Domain: cognitive psychology
-Expansions:
-- short-term memory
-- executive function
-- cognitive load
-- memory capacity
-- active maintenance
-- phonological loop
-- central executive
+Expansions: psychological stress; prolonged stress exposure; persistent stressor; HPA axis activation; allostatic load; cortisol elevation; long-term stress
 
 Construct: gut microbiome signatures
 Domain: unspecified
-Expansions:
-- gut microbiota composition
-- intestinal microbial profile
-- fecal microbiome
-- bacterial diversity
-- microbiome biomarkers
-- 16S rRNA signatures
-- gut bacterial taxa
+Expansions: gut microbiota composition; intestinal microbial profile; fecal microbiome; bacterial diversity; microbiome biomarkers; 16S rRNA signatures; gut bacterial taxa
 
 NOW EXPAND
 
@@ -77,15 +38,15 @@ def build_expansion_prompt(
 
 
 CLAIM_PROMPT = """\
-Rewrite the research query as one neutral, testable proposition — the single claim the debate will weigh.
+Rewrite the research query as one neutral, testable proposition: the single claim the debate will weigh.
 
 Rules:
-- Form: "whether <X relates to Y>". State the relationship to be tested; do not assert the answer.
-- One central relationship only. If the query asks several things, choose the most central — do not join claims with "and".
-- Preserve the question's scope. If it asks for a distinction or taxonomy ("which X transfer and which must be redesigned"), keep both sides in the proposition ("which elements of X transfer and which require redesign"); do not collapse it to a single sub-contest.
-- Keep the query's key constructs; add nothing it does not contain.
-- Neutral, not hedged: leave the answer open, but use no "may", "might", or "could".
-- Output the proposition only, no commentary.
+- Write the proposition in the form "whether <X relates to Y>". State the relationship to test. Do not state the answer.
+- State one relationship only. If the query asks several things, select the one relationship the query is built around. Do not join two relationships with "and".
+- Keep the query's full scope. If the query asks for a distinction or taxonomy ("which X transfer and which must be redesigned"), write both sides ("which elements of X transfer and which require redesign"). Do not reduce it to one side.
+- Use the query's key constructs. Add no construct the query lacks.
+- Leave the answer open. Do not write "may", "might", or "could".
+- Return the proposition only. Add no commentary.
 
 QUERY:
 {query}
@@ -112,5 +73,5 @@ def build_claim_prompt(
         lines.append(f"constructs: {'; '.join(constructs)}")
     if claim:
         lines.append(f"claim: {claim}")
-    rendered = "\n".join(lines) if lines else "(none)"
-    return CLAIM_PROMPT.format(query=query, spans=rendered)
+    spans = "\n".join(lines) if lines else "(none)"
+    return CLAIM_PROMPT.format(query=query, spans=spans)

@@ -1,28 +1,24 @@
-SYSTEM_INSTRUCTION = """You synthesize a citation-grounded cluster of papers into ONE debating agent that represents the cluster's broad epistemic COMMUNITY — its center of gravity, not any single paper or lab.
+SYSTEM_INSTRUCTION = """Synthesize a citation-grounded cluster of papers into one debating agent that represents the research community shared across the cluster's papers, not any single paper or lab. The agent joins a multi-agent debate on a focal claim.
 
-The agent joins a multi-agent debate helping researchers explore hypotheses on a focal claim.
+# WRITE methods_summary FIRST
+Write methods_summary from the sample papers and the given fields-of-study and publication types. State the cluster's common designs, data modalities, populations, and model or analysis families. methods_summary is the only field that may name specific datasets, named indices, named frameworks, or specific statistical methods.
 
-# REASON FIRST (scratchpad)
-methods_summary is a private scratchpad. Here, and ONLY here, you may name specific datasets, indices, named frameworks, and statistical methods. Summarize the cluster as a whole from the sample papers and the provided fields-of-study and publication types: common study designs, data modalities, populations, and model/analysis families.
+# DATASET PLACEMENT
+Write specific dataset names (for example ELSA, KNHANES), named indices or frameworks (for example Area Deprivation Index, allostatic load, Oaxaca-Blinder decomposition), and specific statistical techniques in methods_summary only. Do not write any of them in name, framing, background, or instructions.
 
-# FIREWALL
-Specific dataset names (e.g. ELSA, KNHANES), named indices or frameworks (e.g. Area Deprivation Index, allostatic load, Oaxaca-Blinder decomposition), and specific statistical techniques stay in methods_summary ONLY. The name, framing, background, and instructions must be field-level and contain none of them.
+# WRITE THE REMAINING FIELDS
+- name: write "{Field} · {Facet}". Field is the broadest accurate discipline label. Facet is the one feature that distinguishes this cluster from other clusters in the same field: the specific mechanism, lens, scale, or sub-process the papers share. Write a specific facet (for example "Outlier-Dimension Geometry"), not a generic field term (do not write bare "Alignment", "Methods", or "Modeling"). Write at most 6 words total. Write no dataset or named index. Example: "Social Epidemiologist · Life-Course".
+- framing: write one sentence stating how this community frames the focal claim. Name the claim's key variables and at most one high-level methodological anchor (for example "longitudinal cohorts"). Write no paradigm, dataset, or parameterization.
+- background: write 1 to 3 sentences stating the methodological tradition and evidence base at the family level (for example "longitudinal cohorts and rodent stress paradigms; neuroimaging, endocrine and immune markers"). Name families of designs and measures. Write no specific dataset or index.
+- reasoning_style: state how this community produces evidence, not what it studies.
+- evaluation_lens: state the standard this community applies when judging whether a hypothesis is worth pursuing.
+- instructions: write 3 to 5 rules that govern how the agent argues in the debate: handling correlational versus causal evidence, weighing modalities or populations, treating conflicting evidence, and stating predictions. Write no specific method, dataset, or theoretical commitment. Write no meta-rule such as "cite the references". State the community's stance in framing, reasoning_style, and evaluation_lens, not here.
 
-# THEN SYNTHESIZE (the identity — must survive +5 typical papers)
-- name: format as "{Field} · {Facet}" — the broadest accurate discipline label, a middle dot, then the cluster's single most distinguishing facet. Keep both parts short (whole name <= 6 words), e.g. "Social Epidemiologist · Life-Course". Choose the facet that most sharply separates THIS cluster from any other cluster in the same field: prefer the specific mechanism, lens, scale, or sub-process the sample papers share (e.g. "Outlier-Dimension Geometry", "Retrieval Grounding") over a generic restatement of the field (avoid bare "Alignment", "Methods", "Modeling"). If two facets fit, pick the one a researcher would least expect to apply to a neighboring cluster. Never put datasets or named indices in it.
-- framing: one sentence on how this community frames the focal claim; name the claim's key variables and at most one high-level methodological anchor (e.g. "longitudinal cohorts"). No paradigms, datasets, or parameterizations.
-- background: 1-3 sentences on the methodological tradition and evidence base at the FAMILY level (e.g. "longitudinal cohorts and rodent stress paradigms; neuroimaging, endocrine and immune markers"). Name families of designs and measures, never specific datasets or named indices.
-- reasoning_style: HOW this community produces evidence, not what it studies.
-- evaluation_lens: the standard it privileges when judging whether a hypothesis is worth pursuing.
-- instructions: 3-5 rules for DEBATE BEHAVIOR ONLY — handling correlational vs causal evidence, weighing modalities/populations, treating conflicting evidence, stating predictions. Do NOT name specific methods, datasets, or theoretical commitments, and do NOT add meta-rules such as "cite the references" (handled elsewhere). The stance lives in framing, reasoning_style, and evaluation_lens.
-
-# BREADTH CHECK
-The sample is a fraction of a larger community. Ensure name, framing, background, and instructions would still fit if five more typical papers were added. If not, broaden them.
-
-Return valid JSON conforming to the response schema."""
+# BREADTH
+Write name, framing, background, and instructions so they still apply if five more typical papers were added to the cluster. If they would not, broaden them."""
 
 
-EXAMPLES = """EXAMPLE 1
+EXAMPLE = """EXAMPLE
 FOCAL CLAIM: Chronic stress alters immune function through epigenetic mechanisms.
 CLUSTER CONTEXT:
 cluster size: 38 papers (representative sample below)
@@ -51,68 +47,7 @@ Output:
   ]
 }
 
-EXAMPLE 2
-FOCAL CLAIM: Socioeconomic inequality shapes long-term disease vulnerability.
-CLUSTER CONTEXT:
-cluster size: 25 papers (representative sample below)
-dominant fields of study: Sociology, Public Health, Economics
-publication types: JournalArticle, Study
-SAMPLE PAPERS:
-- Neighborhood disadvantage and allostatic load across the life course
-  TLDR: Cumulative neighborhood disadvantage predicts higher allostatic load in a longitudinal cohort.
-- Income inequality and population health: a cross-national analysis
-  TLDR: Greater income inequality associates with worse population health across countries.
-- Early-life socioeconomic position and adult inflammatory markers
-  TLDR: Lower childhood socioeconomic position predicts elevated adult CRP independent of adult status.
-Output:
-{
-  "methods_summary": "Population and longitudinal cohort studies plus cross-national comparisons; survey and administrative data linking socioeconomic position to health outcomes and physiological wear; observational designs attentive to confounding and life-course timing.",
-  "name": "Social Epidemiologist · Life-Course",
-  "framing": "Socioeconomic inequality is a structural determinant that accumulates across the life course to shape population-level disease risk.",
-  "background": "Draws on longitudinal cohorts and cross-national comparisons relating socioeconomic position to health outcomes and physiological burden across populations.",
-  "reasoning_style": "observational",
-  "evaluation_lens": "external_validity",
-  "instructions": [
-    "Separate association from causation and name plausible confounders.",
-    "Weigh whether findings generalize across populations and settings.",
-    "Treat single-cohort results as provisional until echoed in other populations.",
-    "Flag when individual-level mechanisms are extrapolated to population claims."
-  ]
-}
 
-EXAMPLE 3 (contrast — keep specifics in methods_summary, not the identity)
-FOCAL CLAIM: Socioeconomic inequality shapes population health.
-CLUSTER CONTEXT:
-cluster size: 21 papers (representative sample below)
-dominant fields of study: Public Health, Sociology
-publication types: JournalArticle, Study
-SAMPLE PAPERS:
-- Income inequality and self-rated health in national surveys
-  TLDR: Higher income inequality predicts worse self-rated health across national survey cohorts.
-- Decomposing the education-health gradient
-  TLDR: A decomposition analysis attributes most of the gap to material factors.
-
-WRONG (do NOT do this) — dataset/method jargon leaked into the identity:
-{
-  "name": "Social Epidemiologist",
-  "background": "Uses KNHANES and CGSS survey data with Oaxaca-Blinder decomposition and concentration indices to quantify the income-health gradient.",
-  "instructions": ["Use decomposition logic to attribute health gaps", "Ground claims in the provided references"]
-}
-
-CORRECT — specifics confined to methods_summary; identity stays field-level:
-{
-  "methods_summary": "National population health surveys (e.g. KNHANES, CGSS); cross-sectional and longitudinal designs; self-rated health and mortality outcomes; decomposition and concentration-index analyses of the socioeconomic-health gradient.",
-  "name": "Social Epidemiologist · Health Gradient",
-  "framing": "Socioeconomic position shapes population health through a gradient linking material and social disadvantage to outcomes.",
-  "background": "Works with large population health surveys and longitudinal cohorts, relating income, education, and social position to self-rated health and mortality across populations.",
-  "reasoning_style": "statistical",
-  "evaluation_lens": "external_validity",
-  "instructions": [
-    "Distinguish association from causation and name plausible confounders.",
-    "Weigh whether a finding generalizes across populations and settings.",
-    "Treat single-cohort results as provisional until echoed in other populations.",
-    "State what population-level pattern would follow if the claim holds."
-  ]
 }"""
 
 
@@ -131,3 +66,16 @@ def build_meta_cluster_block(cluster_summary: str) -> str:
 
 def build_meta_prompt(focal_claim: str, cluster_summary: str) -> str:
     return f"{build_meta_cache_block(focal_claim)}\n\n{build_meta_cluster_block(cluster_summary)}"
+
+
+def build_generic_meta_block(focal_claim: str) -> str:
+    return (
+        "Invent ONE plausible research community that would engage the focal claim "
+        "below and synthesize it into a field-level debating persona. You are given no "
+        "cluster of papers - ground the persona in the focal claim and its domain alone, "
+        "choosing a distinct discipline, framing, and evaluation lens a real community "
+        "in this area would hold.\n\n"
+        f"{EXAMPLES}\n\n"
+        "NOW SYNTHESIZE\n\n"
+        f"FOCAL CLAIM: {focal_claim}\n\nOutput:"
+    )

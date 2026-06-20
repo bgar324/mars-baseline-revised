@@ -1,61 +1,62 @@
+import asyncio
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from mars.api.dependencies import get_debate_service, get_pipeline
-from mars.models.debate import Cycle, Debate
-from mars.models.persona import PersonaAgent
+from mars.api.dependencies import get_pipeline
+from mars.models.debate import Debate, Synthesis
+from mars.models.persona import Persona
 from mars.models.s2 import Paper
-from mars.schemas.debate import DebateRequest
 from mars.schemas.event import (
     ClusterAssignment,
     ClusterGroup,
     PipelineState,
     QueryRequest,
-    StageName,
 )
-from mars.schemas.query import ClaimUpdate
-from mars.services.debate import (
-    DebateError,
-    DebateService,
-)
-from mars.services.debate import (
-    NotFoundError as DebateNotFoundError,
-)
-from mars.services.pipeline import NotFoundError, PipelineService, PrerequisiteError
+from mars.schemas.query import ExtractedQuery
+from mars.workflow.base import WorkflowContext
+from mars.workflow.pipeline import NotFoundError, Pipeline
 
 query_router = APIRouter(prefix="/api/v1/queries", tags=["queries"])
 
 
-@query_router.post("")
-async def create_query(
-    request: QueryRequest,
-    pipeline: PipelineService = Depends(get_pipeline),
-) -> PipelineState:
-    return await pipeline.create_query(request.query)
-
-
-@query_router.get("/{query_id}")
-async def get_query(
-    query_id: str,
-    pipeline: PipelineService = Depends(get_pipeline),
-) -> PipelineState:
+def require_state(query_id: str, pipeline: Pipeline) -> PipelineState:
     try:
         return pipeline.get_state(query_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@query_router.get("/{query_id}/events")
-async def stream_events(
-    query_id: str,
-    pipeline: PipelineService = Depends(get_pipeline),
-) -> StreamingResponse:
+def require_context(query_id: str, pipeline: Pipeline) -> WorkflowContext:
     try:
-        pipeline.get_state(query_id)
+        return pipeline.get_context(query_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@query_router.post("")
+async def create_query(
+    request: QueryRequest,
+    pipeline: Pipeline = Depends(get_pipeline),
+) -> PipelineState:
+    state = pipeline.create_query(request.query)
+    asyncio.create_task(pipeline.run_all(state.query_id))
+    return state
+
+
+@query_router.get("/{query_id}")
+async def get_query(
+    query_id: str, pipeline: Pipeline = Depends(get_pipeline)
+) -> PipelineState:
+    return require_state(query_id, pipeline)
+
+
+@query_router.get("/{query_id}/events")
+async def stream_events(
+    query_id: str, pipeline: Pipeline = Depends(get_pipeline)
+) -> StreamingResponse:
+    require_state(query_id, pipeline)
 
     async def event_stream() -> AsyncIterator[str]:
         async for event in pipeline.subscribe(query_id):
@@ -64,57 +65,28 @@ async def stream_events(
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-async def _run_stage(
-    query_id: str, stage: StageName, pipeline: PipelineService
-) -> PipelineState:
-    try:
-        return await pipeline.run_stage(query_id, stage)
-    except NotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PrerequisiteError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-
-@query_router.post("/{query_id}/retrieve")
-async def run_retrieve(
-    query_id: str, pipeline: PipelineService = Depends(get_pipeline)
-) -> PipelineState:
-    return await _run_stage(query_id, StageName.RETRIEVE, pipeline)
-
-
-@query_router.post("/{query_id}/clusters")
-async def run_clusters(
-    query_id: str, pipeline: PipelineService = Depends(get_pipeline)
-) -> PipelineState:
-    return await _run_stage(query_id, StageName.CLUSTER, pipeline)
-
-
-@query_router.post("/{query_id}/personas")
-async def run_personas(
-    query_id: str, pipeline: PipelineService = Depends(get_pipeline)
-) -> PipelineState:
-    return await _run_stage(query_id, StageName.PERSONA, pipeline)
-
-
-def _artifact(query_id: str, stage: StageName, pipeline: PipelineService):
-    try:
-        return pipeline.get_artifact(query_id, stage)
-    except NotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+@query_router.get("/{query_id}/extraction")
+async def get_extraction(
+    query_id: str, pipeline: Pipeline = Depends(get_pipeline)
+) -> ExtractedQuery:
+    extracted = require_context(query_id, pipeline).extracted
+    if extracted is None:
+        raise HTTPException(status_code=404, detail="extraction not available yet")
+    return extracted
 
 
 @query_router.get("/{query_id}/papers")
 async def get_papers(
-    query_id: str, pipeline: PipelineService = Depends(get_pipeline)
+    query_id: str, pipeline: Pipeline = Depends(get_pipeline)
 ) -> list[Paper]:
-    return _artifact(query_id, StageName.RETRIEVE, pipeline)
+    return require_context(query_id, pipeline).papers
 
 
 @query_router.get("/{query_id}/clusters")
 async def get_clusters(
-    query_id: str, pipeline: PipelineService = Depends(get_pipeline)
+    query_id: str, pipeline: Pipeline = Depends(get_pipeline)
 ) -> ClusterAssignment:
-    clusters: dict[int, list[Paper]] = _artifact(query_id, StageName.CLUSTER, pipeline)
+    clusters = require_context(query_id, pipeline).clusters or {}
     groups = [
         ClusterGroup(cluster_id=cid, paper_ids=[p.id for p in papers])
         for cid, papers in sorted(clusters.items())
@@ -126,102 +98,27 @@ async def get_clusters(
 
 @query_router.get("/{query_id}/personas")
 async def get_personas(
-    query_id: str, pipeline: PipelineService = Depends(get_pipeline)
-) -> list[PersonaAgent]:
-    return _artifact(query_id, StageName.PERSONA, pipeline)
+    query_id: str, pipeline: Pipeline = Depends(get_pipeline)
+) -> list[Persona]:
+    return require_context(query_id, pipeline).personas
 
 
-@query_router.put("/{query_id}/claim")
-async def update_claim(
-    query_id: str,
-    update: ClaimUpdate,
-    pipeline: PipelineService = Depends(get_pipeline),
-) -> PipelineState:
-    try:
-        return pipeline.update_claim(query_id, update.claim)
-    except NotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PrerequisiteError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-
-debate_router = APIRouter(prefix="/api/v1/debates", tags=["debates"])
-
-
-def _http_error(exc: DebateError) -> HTTPException:
-    status = 404 if isinstance(exc, DebateNotFoundError) else 409
-    return HTTPException(status_code=status, detail=str(exc))
-
-
-@debate_router.post("")
-async def create_debate(
-    request: DebateRequest,
-    service: DebateService = Depends(get_debate_service),
-    pipeline: PipelineService = Depends(get_pipeline),
-) -> Debate:
-    cluster_papers = request.cluster_papers
-    if not cluster_papers and request.query_id is not None:
-        clusters: dict[int, list[Paper]] = _artifact(
-            request.query_id, StageName.CLUSTER, pipeline
-        )
-        cluster_papers = {
-            str(cid): papers for cid, papers in clusters.items() if cid != -1
-        }
-    return await service.start(
-        focal_claim=request.focal_claim,
-        agents=request.agents,
-        cluster_papers=cluster_papers,
-        problem=request.problem,
-    )
-
-
-@debate_router.get("/{debate_id}")
+@query_router.get("/{query_id}/debate")
 async def get_debate(
-    debate_id: str,
-    service: DebateService = Depends(get_debate_service),
+    query_id: str, pipeline: Pipeline = Depends(get_pipeline)
 ) -> Debate:
-    try:
-        return service.get_debate(debate_id)
-    except DebateError as exc:
-        raise _http_error(exc) from exc
+    debate = require_context(query_id, pipeline).debate
+    if debate is None:
+        raise HTTPException(status_code=404, detail="debate not available yet")
+    return debate
 
 
-@debate_router.get("/{debate_id}/cycles/{cycle_id}")
-async def get_cycle(
-    debate_id: str,
-    cycle_id: str,
-    service: DebateService = Depends(get_debate_service),
-) -> Cycle:
-    try:
-        return service.get_cycle(debate_id, cycle_id)
-    except DebateError as exc:
-        raise _http_error(exc) from exc
-
-
-@debate_router.post("/{debate_id}/cycles/{cycle_id}/run")
-async def run_cycle(
-    debate_id: str,
-    cycle_id: str,
-    service: DebateService = Depends(get_debate_service),
-) -> Cycle:
-    try:
-        return await service.run_cycle(debate_id=debate_id, cycle_id=cycle_id)
-    except DebateError as exc:
-        raise _http_error(exc) from exc
-
-
-@debate_router.get("/{debate_id}/events")
-async def stream_debate_events(
-    debate_id: str,
-    service: DebateService = Depends(get_debate_service),
-) -> StreamingResponse:
-    try:
-        service.get_debate(debate_id)
-    except DebateError as exc:
-        raise _http_error(exc) from exc
-
-    async def event_stream() -> AsyncIterator[str]:
-        async for event in service.subscribe(debate_id):
-            yield f"data: {event.model_dump_json()}\n\n"
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+@query_router.get("/{query_id}/hypotheses")
+async def get_hypotheses(
+    query_id: str, pipeline: Pipeline = Depends(get_pipeline)
+) -> Synthesis:
+    cycle = require_context(query_id, pipeline).cycle
+    synthesis = cycle.synthesis if cycle else None
+    if synthesis is None:
+        raise HTTPException(status_code=404, detail="hypotheses not available yet")
+    return synthesis

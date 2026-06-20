@@ -1,37 +1,57 @@
-from __future__ import annotations
-
 from datetime import datetime
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-
-T = TypeVar("T")
+from mars.llm.providers.base import TokenUsage
 
 
 class StageName(str, Enum):
     EXTRACT = "extract"
-    EXPAND = "expand"
     RETRIEVE = "retrieve"
     CLUSTER = "cluster"
     PERSONA = "persona"
+    DEBATE = "debate"
 
 
 class StageStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETE = "complete"
+    SKIPPED = "skipped"
     FAILED = "failed"
 
 
-class StageNode(BaseModel, Generic[T]):
-    stage: StageName
-    status: StageStatus
-    result: T | None = None
+class StepStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETE = "complete"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+
+
+class StepNode(BaseModel):
+    name: str
+    status: StepStatus = StepStatus.PENDING
+    result: dict[str, Any] | None = None
     error: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
+    duration_seconds: float | None = None
+    usage: TokenUsage | None = None
+
+
+class StageNode(BaseModel):
+    stage: StageName
+    status: StageStatus = StageStatus.PENDING
+    steps: dict[str, StepNode] = Field(default_factory=dict)
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_seconds: float | None = None
+    usage: TokenUsage | None = None
 
 
 class PipelineState(BaseModel):
@@ -48,28 +68,26 @@ class EventType(str, Enum):
     CLUSTERS_GENERATED = "clusters.generated"
     PERSONAS_CREATED = "personas.created"
     STAGE_STARTED = "stage.started"
+    STAGE_SKIPPED = "stage.skipped"
+    STAGE_COMPLETED = "stage.completed"
     STAGE_FAILED = "stage.failed"
+    STEP_STARTED = "step.started"
+    STEP_SKIPPED = "step.skipped"
+    STEP_COMPLETED = "step.completed"
+    STEP_FAILED = "step.failed"
 
 
 class PipelineEvent(BaseModel):
     event: EventType
     query_id: str
     stage: StageName | None = None
+    step: str | None = None
     payload: Any = None
     timestamp: datetime
 
 
-PIPELINE_GRAPH: dict[StageName, list[StageName]] = {
-    StageName.EXTRACT: [],
-    StageName.EXPAND: [StageName.EXTRACT],
-    StageName.RETRIEVE: [StageName.EXPAND],
-    StageName.CLUSTER: [StageName.RETRIEVE],
-    StageName.PERSONA: [StageName.CLUSTER],
-}
-
 STAGE_EVENT: dict[StageName, EventType] = {
     StageName.EXTRACT: EventType.QUERY_DECOMPOSED,
-    StageName.EXPAND: EventType.QUERY_EXPANDED,
     StageName.RETRIEVE: EventType.PAPERS_RETRIEVED,
     StageName.CLUSTER: EventType.CLUSTERS_GENERATED,
     StageName.PERSONA: EventType.PERSONAS_CREATED,

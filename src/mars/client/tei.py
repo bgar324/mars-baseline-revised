@@ -23,8 +23,7 @@ from mars.models.grobid import (
 )
 
 
-class ParserError(Exception):
-    ...
+class ParserError(Exception): ...
 
 
 class Parser:

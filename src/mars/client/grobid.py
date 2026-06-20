@@ -13,8 +13,7 @@ _ERROR_CODES = {
 }
 
 
-class GrobidError(Exception):
-    ...
+class GrobidError(Exception): ...
 
 
 class GrobidClient(BaseClient):

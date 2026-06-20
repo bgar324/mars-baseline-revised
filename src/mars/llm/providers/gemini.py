@@ -21,7 +21,9 @@ T = TypeVar("T", bound=BaseModel)
 def build_thinking_config(level: str | None) -> types.ThinkingConfig | None:
     if not level:
         return None
-    return types.ThinkingConfig(thinking_level=getattr(types.ThinkingLevel, level.upper()))
+    return types.ThinkingConfig(
+        thinking_level=getattr(types.ThinkingLevel, level.upper())
+    )
 
 
 def prepare_contents(
@@ -103,7 +105,9 @@ class GeminiProvider(LLMProvider):
             **extra,
         )
         if not thinking_disabled:
-            thinking_config = build_thinking_config(thinking_level or cfg.thinking_level)
+            thinking_config = build_thinking_config(
+                thinking_level or cfg.thinking_level
+            )
             if thinking_config is not None:
                 kwargs["thinking_config"] = thinking_config
         return types.GenerateContentConfig(**kwargs)
@@ -140,8 +144,10 @@ class GeminiProvider(LLMProvider):
             raise LLMProviderError("Gemini returned an empty response")
         return response
 
-    async def generate(self, *, messages: list[dict[str, str]]) -> LLMResponse:
-        response = await self._call(messages)
+    async def generate(
+        self, *, messages: list[dict[str, str]], thinking_level: str | None = None
+    ) -> LLMResponse:
+        response = await self._call(messages, thinking_level=thinking_level)
         return LLMResponse(
             content=response.text,
             usage=extract_usage(response),

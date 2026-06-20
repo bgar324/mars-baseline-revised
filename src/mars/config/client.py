@@ -9,4 +9,6 @@ class ClientConfig(BaseSettings):
     user_agent: str = "mars"
     request_timeout: float = 60.0
     min_request_interval: float = 0.0
+    max_concurrency: int = 1
+    cache_dir: str | None = None
     api_key: SecretStr | None = None

@@ -1,58 +1,34 @@
-SYSTEM_PROMPT = """You write literature-search queries for a debating agent.
+SYSTEM_PROMPT = """Write literature-search queries for a debating agent defending a position. Write each query as one short declarative sentence in the agent's own terms (snippet search is semantic). Do not write keywords or questions.
 
-The agent is defending a position in a scientific debate. Write queries that retrieve passages bearing
-on that position. Snippet search is semantic, so each query is one short, descriptive sentence in the
-agent's own terms — not keywords, not a question.
-
-- The two PRIMARY queries find evidence to SHAPE the argument: the mechanism it rests on and the link
-  it must support. Make them two different angles on the position, not rephrasings.
-- The SECONDARY query finds evidence to AUGMENT the argument from the wider literature: corroboration,
-  a boundary condition, or a competing finding the agent should be ready for.
-- Keep the position's constructs; use standard terminology for the field; add no construct the
-  position does not contain.
-- Write every query in the focal claim's own domain. The secondary query widens coverage within that
-  domain; keep it there rather than moving to an analogous field."""
+- Write exactly 2 PRIMARY queries: one stating the mechanism the position rests on, one stating the link the position must support. State a different relationship in each; do not rephrase one as the other.
+- Write exactly 1 SECONDARY query that retrieves wider literature: corroborating evidence, a boundary condition, or a competing finding.
+- Use only the position's constructs and standard field terminology. Add no construct the position lacks. Restrict every query to the focal claim's domain; do not query an analogous field."""
 
 
 QUERY_PROMPT = """# YOUR POSITION
-
 {framing}
 
 # FOCAL CLAIM
-
 {focal_claim}
 
 # YOUR LATEST CLAIM
-
 {claim}
 
 # TASK
-
-Based on your position and claim above, write your search queries: two PRIMARY (to shape your argument
-from your own cluster) and one SECONDARY (to augment it from the wider literature). Each one short
-descriptive sentence, kept in the focal claim's own domain."""
+Write exactly 2 PRIMARY queries and exactly 1 SECONDARY query for this position."""
 
 
-REPHRASE_SYSTEM = """You write a single literature-search query to cross-examine a debating agent's claim.
-
-Snippet search is semantic, so the query is one short, descriptive sentence — not keywords, not a
-question. Word it to surface passages that would TEST the claim: confirm it or undercut it. Keep the
-claim's constructs and standard terminology; add no construct the claim does not contain."""
+REPHRASE_SYSTEM = """Write 1 literature-search query that retrieves evidence which confirms or contradicts a debating agent's claim. Write one short declarative sentence (snippet search is semantic). Do not write keywords or a question. Use only the claim's constructs and standard terminology. Add no construct the claim lacks."""
 
 
 REPHRASE_PROMPT = """# AGENT POSITION
-
 {agent_claim}
 
 # CENTRAL CONFLICT
-
 {central_conflict}
 
 # TASK
-
-Based on the agent's position above, write one search query to cross-examine it: a query that retrieves
-passages testing whether the literature supports or undercuts this specific claim on the central
-conflict, kept in the central conflict's own domain. One short descriptive sentence. Output only the query."""
+Write 1 query that retrieves evidence bearing on this claim and the central conflict, within the claim's own domain. Return only the query."""
 
 
 def build_query_prompt(framing: str, focal_claim: str, claim: str) -> str:
@@ -60,4 +36,6 @@ def build_query_prompt(framing: str, focal_claim: str, claim: str) -> str:
 
 
 def build_rephrase_prompt(agent_claim: str, central_conflict: str) -> str:
-    return REPHRASE_PROMPT.format(agent_claim=agent_claim, central_conflict=central_conflict)
+    return REPHRASE_PROMPT.format(
+        agent_claim=agent_claim, central_conflict=central_conflict
+    )

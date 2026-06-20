@@ -4,73 +4,46 @@ from mars.client.s2 import SemanticScholarClient
 from mars.config.settings import AppSettings, DebateSettings
 from mars.llm.providers.gemini import GeminiProvider
 from mars.llm.providers.langextract import LangExtractProvider
-from mars.services.cluster import ClusterService
-from mars.services.debate import DebateService
-from mars.services.persona import PersonaService
-from mars.services.pipeline import PipelineService
-from mars.services.query import QueryService
-from mars.services.retrieval import RetrievalService
+from mars.workflow.pipeline import Pipeline, build
 
-
-_settings = AppSettings()
+SETTINGS = AppSettings()
 
 
 def get_settings() -> AppSettings:
-    return _settings
+    return SETTINGS
 
 
 @lru_cache(maxsize=1)
 def get_gemini() -> GeminiProvider:
-    return GeminiProvider.from_settings(_settings.gemini)
+    return GeminiProvider.from_settings(SETTINGS.gemini)
 
 
 @lru_cache(maxsize=1)
 def get_s2() -> SemanticScholarClient:
-    return SemanticScholarClient.from_env(_settings.s2)
+    return SemanticScholarClient.from_env(SETTINGS.s2)
 
 
 @lru_cache(maxsize=1)
 def get_langextract() -> LangExtractProvider:
-    return LangExtractProvider(_settings.langextract)
-
-
-def get_query_service() -> QueryService:
-    return QueryService(langextract=get_langextract(), gemini=get_gemini())
-
-
-def get_retrieval_service() -> RetrievalService:
-    return RetrievalService(s2=get_s2(), config=_settings.pipeline.retrieval)
-
-
-def get_cluster_service() -> ClusterService:
-    return ClusterService(config=_settings.pipeline.clustering)
-
-
-def get_persona_service() -> PersonaService:
-    return PersonaService(gemini=get_gemini())
+    return LangExtractProvider(SETTINGS.langextract)
 
 
 @lru_cache(maxsize=1)
-def get_pipeline() -> PipelineService:
-    return PipelineService(
-        query=get_query_service(),
-        retrieval=get_retrieval_service(),
-        cluster=get_cluster_service(),
-        persona=get_persona_service(),
-    )
+def get_judge_provider() -> GeminiProvider:
+    return GeminiProvider.from_settings(DebateSettings(api_key=SETTINGS.gemini.api_key))
 
 
 @lru_cache(maxsize=1)
-def get_debate_provider() -> GeminiProvider:
-    return GeminiProvider.from_settings(
-        DebateSettings(api_key=_settings.gemini.api_key)
-    )
-
-
-@lru_cache(maxsize=1)
-def get_debate_service() -> DebateService:
-    return DebateService(
-        llm=get_debate_provider(),
+def get_pipeline() -> Pipeline:
+    return build(
+        langextract=get_langextract(),
+        gemini=get_gemini(),
         s2=get_s2(),
-        retrieval_filters={"minCitationCount": _settings.pipeline.retrieval.min_citation_count},
+        judge_llm=get_judge_provider(),
+        retrieval_config=SETTINGS.pipeline.retrieval,
+        cluster_config=SETTINGS.pipeline.clustering,
+        retrieval_filters={
+            "minCitationCount": SETTINGS.pipeline.retrieval.min_citation_count
+        },
+        include_debate=True,
     )

@@ -1,16 +1,6 @@
-from __future__ import annotations
-
 from enum import Enum
 
 from pydantic import BaseModel, Field
-
-
-class PipelineConfig(BaseModel):
-    document_extraction: DocumentExtractionConfig = Field(
-        default_factory=lambda: DocumentExtractionConfig()
-    )
-    retrieval: RetrievalConfig = Field(default_factory=lambda: RetrievalConfig())
-    clustering: ClusterConfig = Field(default_factory=lambda: ClusterConfig())
 
 
 class SectionConfig(BaseModel):
@@ -94,8 +84,7 @@ class PublicationType(str, Enum):
 
 
 class RetrievalConfig(BaseModel):
-    papers_per_anchor: int = Field(default=25, ge=1, le=100)
-    snippets_per_anchor: int = Field(default=25, ge=1, le=1000)
+    snippets_per_anchor: int = Field(default=50, ge=1, le=1000)
     retrieval_budget: int = Field(default=300, ge=1)
     publication_types: list[PublicationType] = Field(
         default_factory=lambda: list(PublicationType)
@@ -180,6 +169,11 @@ class ClusterAlgorithm(str, Enum):
     LEIDEN = "leiden"
 
 
+class MergeConfig(BaseModel):
+    enabled: bool = False
+    n_clusters: int = 4
+
+
 class ClusterConfig(BaseModel):
     algorithm: ClusterAlgorithm = ClusterAlgorithm.LEIDEN
     umap: UMAPConfig = Field(default_factory=UMAPConfig)
@@ -187,6 +181,15 @@ class ClusterConfig(BaseModel):
     knn: KNNConfig = Field(default_factory=KNNConfig)
     leiden: LeidenConfig = Field(default_factory=LeidenConfig)
     normalization: Normalization = Normalization.L2
+    merge: MergeConfig = Field(default_factory=MergeConfig)
+
+
+class PipelineConfig(BaseModel):
+    document_extraction: DocumentExtractionConfig = Field(
+        default_factory=DocumentExtractionConfig
+    )
+    retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
+    clustering: ClusterConfig = Field(default_factory=ClusterConfig)
 
 
 def normalize_heading(heading: str, patterns: dict[str, list[str]]) -> str:
@@ -202,6 +205,3 @@ def resolve_mcs(config: HDBSCANConfig, n_papers: int) -> int:
     if config.mcs is not None:
         return config.mcs
     return max(5, n_papers // 30)
-
-
-PipelineConfig.model_rebuild()

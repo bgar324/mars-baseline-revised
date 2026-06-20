@@ -58,3 +58,6 @@ yarn-error.log*
 # typescript
 /web-ui/*.tsbuildinfo
 /web-ui/next-env.d.ts
+
+# semantic scholar resp. cache
+.s2_cache/

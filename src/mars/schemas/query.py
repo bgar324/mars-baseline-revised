@@ -10,27 +10,48 @@ class SemanticRole(str, Enum):
 
 
 class QuerySpan(BaseModel):
-    id: str
-    text: str
-    char_span: tuple[int, int]
-    role: SemanticRole
+    id: str = Field(description="Unique identifier for this span.")
+    text: str = Field(description="Exact substring of the query covered by this span.")
+    char_span: tuple[int, int] = Field(
+        description=(
+            "Start and end character offsets of the span in raw_text, as "
+            "[start, end) into the original string."
+        )
+    )
+    role: SemanticRole = Field(
+        description=(
+            "Semantic role of the span. 'domain': scholarly field. 'goal': the "
+            "intended outcome or research aim. 'construct': a variable, concept, or "
+            "measure. 'claim': an asserted relationship to be tested."
+        )
+    )
 
 
 class ExtractedQuery(BaseModel):
-    raw_text: str
-    spans: list[QuerySpan]
-    claim: str
+    raw_text: str = Field(description="The user's query verbatim.")
+    spans: list[QuerySpan] = Field(
+        description="Spans labeling the domain, goal, construct, and claim parts of raw_text."
+    )
+    claim: str = Field(description="The query restated as a single testable assertion.")
 
 
 class ClaimUpdate(BaseModel):
-    claim: str
+    claim: str = Field(
+        description="The revised claim restated as a single testable assertion."
+    )
 
 
 class ExpandedConstruct(BaseModel):
-    construct_id: str = Field(description="ID of the source QuerySpan")
-    construct_text: str = Field(description="Original construct text")
+    construct_id: str = Field(description="id of the source construct QuerySpan.")
+    construct_text: str = Field(
+        description="text of the source construct, copied verbatim."
+    )
     expansions: list[str] = Field(
-        description="Semantically related terms for literature retrieval",
+        description=(
+            "Alternative terms and phrasings for this construct used to query the "
+            "literature, including synonyms, related measures, and standard "
+            "terminology. Provide 5 to 8 entries."
+        ),
         min_length=5,
         max_length=8,
     )
@@ -38,31 +59,39 @@ class ExpandedConstruct(BaseModel):
 
 class QueryExpansion(BaseModel):
     domain: str = Field(
-        description="The scholarly field the query operates in, "
-        "either taken from the extracted domain span or inferred "
-        "from the constructs when no domain was extracted"
+        description=(
+            "The scholarly field the query operates in. Use the extracted domain "
+            "span when present; otherwise infer it from the constructs."
+        )
     )
     domain_inferred: bool = Field(
-        description="True when domain was inferred by the model rather "
-        "than taken from an extracted span"
+        description=(
+            "true when domain was inferred from the constructs, false when copied "
+            "from an extracted domain span."
+        )
     )
-    expansions: list[ExpandedConstruct]
+    expansions: list[ExpandedConstruct] = Field(
+        description="One ExpandedConstruct per construct span in the query."
+    )
 
 
 class HypotheticalQuestions(BaseModel):
     questions: list[str] = Field(
-        description="Paper-title-style or abstract-style questions "
-        "synthesized from the query's constructs and claim, used as "
-        "additional retrieval anchors",
+        description=(
+            "Research questions phrased as paper titles or abstract sentences, "
+            "built from the query's constructs and claim, used as retrieval "
+            "anchors. Provide 6 to 8 entries."
+        ),
         min_length=6,
         max_length=8,
     )
 
 
 class RetrievalAnchors(BaseModel):
-    construct_queries: list[str] = Field(
-        description="One query per construct, joining the construct with "
-        "its expansions to widen recall"
+    hypothetical_queries: list[str] = Field(
+        description="Hypothetical research questions used as retrieval anchors."
     )
-    hypothetical_queries: list[str]
-    claim_query: str | None = None
+    claim_query: str | None = Field(
+        default=None,
+        description="The claim phrased as a retrieval query, or null if unavailable.",
+    )

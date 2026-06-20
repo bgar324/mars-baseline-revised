@@ -27,4 +27,5 @@ class LangExtractProvider:
             extraction_passes=extraction_passes or self._settings.extraction_passes,
             max_char_buffer=max_char_buffer or self._settings.max_char_buffer,
             max_workers=self._settings.max_workers,
+            show_progress=False,
         )

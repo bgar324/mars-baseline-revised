@@ -50,7 +50,9 @@ class LLMProvider(ABC):
     name: ProviderType
 
     @abstractmethod
-    async def generate(self, *, messages: list[dict[str, str]]) -> LLMResponse: ...
+    async def generate(
+        self, *, messages: list[dict[str, str]], thinking_level: str | None = None
+    ) -> LLMResponse: ...
 
     @abstractmethod
     async def generate_structured(

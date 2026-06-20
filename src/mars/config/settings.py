@@ -72,7 +72,8 @@ class SemanticScholarSettings(BaseSettings):
     api_key: SecretStr | None = None
     base_url: str = "https://api.semanticscholar.org"
     request_timeout: float = 60.0
-    min_request_interval: float = 1.1
+    min_request_interval: float = 1.5
+    cache_dir: str | None = ".s2_cache"
 
 
 class HuggingFaceSettings(BaseSettings):

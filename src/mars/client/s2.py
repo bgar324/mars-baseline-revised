@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from mars.client.base import BaseClient
+from mars.client.base import BaseClient, RateLimiter
 from mars.config.client import ClientConfig
 from mars.config.settings import SemanticScholarSettings
 from mars.models.s2 import (
@@ -90,14 +90,34 @@ _URL_SITES = (
     "biorxiv.org",
 )
 
-_MAX_RETRIES = 5
+_MAX_RETRIES = 6
 _PAGE_LIMIT = 1000
 _SEARCH_LIMIT = 100
 _BATCH_LIMIT = 500
 
 
-class SemanticScholarError(Exception):
-    ...
+class SemanticScholarError(Exception): ...
+
+
+REQUEST_LIMITER: tuple[asyncio.Semaphore, RateLimiter] | None = None
+
+
+def request_limiter(min_interval: float) -> tuple[asyncio.Semaphore, RateLimiter]:
+    global REQUEST_LIMITER
+    if REQUEST_LIMITER is None:
+        REQUEST_LIMITER = (asyncio.Semaphore(1), RateLimiter(min_interval))
+    return REQUEST_LIMITER
+
+
+def _backoff(attempt: int) -> float:
+    return min(2.0 * 2**attempt, 30.0) + random.uniform(0.0, 1.0)
+
+
+def _retry_delay(response: httpx.Response, attempt: int) -> float:
+    retry_after = response.headers.get("Retry-After")
+    if retry_after and retry_after.isdigit():
+        return min(float(retry_after), 60.0)
+    return _backoff(attempt)
 
 
 class SemanticScholarClient(BaseClient):
@@ -108,6 +128,8 @@ class SemanticScholarClient(BaseClient):
                 "No Semantic Scholar API key; using the shared unauthenticated "
                 "rate pool. Set SEMANTIC_SCHOLAR_API_KEY to authenticate."
             )
+        else:
+            logger.info("Semantic Scholar API key loaded; authenticated rate pool.")
 
     @classmethod
     def from_env(
@@ -120,6 +142,7 @@ class SemanticScholarClient(BaseClient):
                 api_key=settings.api_key,
                 request_timeout=settings.request_timeout,
                 min_request_interval=settings.min_request_interval,
+                cache_dir=settings.cache_dir,
             )
         )
 
@@ -165,47 +188,52 @@ class SemanticScholarClient(BaseClient):
         clean_params = (
             {k: v for k, v in params.items() if v is not None} if params else None
         )
-        backoff = 1.0
-        for attempt in range(_MAX_RETRIES):
-            await self._rate_limiter.wait()
-            try:
-                response = await self.session.request(
-                    method, path, params=clean_params, json=json
-                )
-            except httpx.HTTPError as exc:
-                if attempt == _MAX_RETRIES - 1:
-                    raise SemanticScholarError(
-                        f"Request to {path} failed: {exc}"
-                    ) from exc
-                await asyncio.sleep(backoff + random.uniform(0.0, 0.5))
-                backoff *= 2
-                continue
+        cache_key = self._cache.key(method, path, clean_params, json)
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
 
-            if response.status_code == 404:
-                return None
-            if response.status_code == 429 or response.status_code >= 500:
-                if attempt == _MAX_RETRIES - 1:
-                    raise SemanticScholarError(
-                        f"{response.status_code} from {path} after retries"
+        semaphore, rate_limiter = request_limiter(self.config.min_request_interval)
+        async with semaphore:
+            for attempt in range(_MAX_RETRIES):
+                await rate_limiter.wait()
+                try:
+                    response = await self.session.request(
+                        method, path, params=clean_params, json=json
                     )
-                delay = backoff + random.uniform(0.0, 0.5)
-                retry_after = response.headers.get("Retry-After")
-                if retry_after is not None:
-                    try:
-                        delay = float(retry_after)
-                    except ValueError:
-                        pass
-                await asyncio.sleep(delay)
-                backoff *= 2
-                continue
+                except httpx.HTTPError as exc:
+                    if attempt == _MAX_RETRIES - 1:
+                        raise SemanticScholarError(
+                            f"Request to {path} failed: {exc}"
+                        ) from exc
+                    await asyncio.sleep(_backoff(attempt))
+                    continue
 
-            try:
-                response.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                raise SemanticScholarError(
-                    f"{response.status_code} from {path}: {response.text}"
-                ) from exc
-            return response.json()
+                if response.status_code == 404:
+                    return None
+                if response.status_code == 429 or response.status_code >= 500:
+                    if attempt == _MAX_RETRIES - 1:
+                        if response.status_code == 429:
+                            logger.warning(
+                                "429 from %s after retries; returning empty", path
+                            )
+                            return None
+                        raise SemanticScholarError(
+                            f"{response.status_code} from {path} after retries"
+                        )
+                    await asyncio.sleep(_retry_delay(response, attempt))
+                    continue
+
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    raise SemanticScholarError(
+                        f"{response.status_code} from {path}: {response.text}"
+                    ) from exc
+                payload = response.json()
+                if payload:
+                    self._cache.set(cache_key, payload)
+                return payload
         return None
 
     @staticmethod
@@ -436,7 +464,9 @@ class SemanticScholarClient(BaseClient):
             **filters,
         }
         if paper_ids:
-            params["paperIds"] = ",".join(self._normalize_id(p) for p in paper_ids[:100])
+            params["paperIds"] = ",".join(
+                self._normalize_id(p) for p in paper_ids[:100]
+            )
         data = await self._request("GET", "/graph/v1/snippet/search", params=params)
         return [self._parse_snippet(it) for it in (data or {}).get("data", [])]
 

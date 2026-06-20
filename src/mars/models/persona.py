@@ -24,55 +24,48 @@ EvaluationLens = Literal[
 ]
 
 
-class PersonaSynthesis(BaseModel):
+class PersonaDraft(BaseModel):
     methods_summary: str = Field(
         description=(
-            "Cluster-level summary of common study designs, data modalities, "
-            "populations, and model families. Specific datasets, named indices, "
-            "and statistical methods belong here only. Reason here first."
+            "List the study designs, data modalities, populations, and model "
+            "families shared across the cluster's papers. Name specific datasets, "
+            "indices, and statistical methods only in this field. Write this field "
+            "before the others."
         )
     )
     name: str = Field(
         description=(
-            "Format '{Field} · {Facet}': discipline label, a middle dot, then the "
-            "cluster's distinguishing facet (method/lens/scale/subfocus). "
-            "E.g. 'Social Epidemiologist · Life-Course'."
+            "Format exactly as '{Field} · {Facet}': a discipline label, a U+00B7 "
+            "middle dot surrounded by spaces, then the cluster's distinguishing "
+            "facet (method, evaluation lens, scale, or subfocus). Example: "
+            "'Social Epidemiologist · Life-Course'."
         )
     )
     framing: str = Field(
-        description="One sentence on how this community frames the focal claim"
+        description="One sentence stating how this cluster interprets the focal claim."
     )
     background: str = Field(
-        description="Methodological tradition and evidence base, at the family level"
+        description=(
+            "Name the cluster's methodological tradition and the body of evidence "
+            "it draws on. State traditions at the family level, not individual "
+            "papers."
+        )
     )
     reasoning_style: ReasoningStyle
     evaluation_lens: EvaluationLens
     instructions: list[str] = Field(
-        description="Debate-behavior rules only",
+        description=(
+            "Rules governing only how this persona argues during debate. Each entry "
+            "is one imperative sentence. Provide 3 to 5 entries."
+        ),
         min_length=3,
         max_length=5,
     )
 
 
-class PersonaAgent(BaseModel):
+class Persona(PersonaDraft):
     cluster_id: int
-    name: str = Field(
-        description="'{Field} · {Facet}' label, e.g. 'Social Epidemiologist · Life-Course'"
-    )
-    framing: str = Field(
-        description="One sentence on how this cluster frames the focal claim"
-    )
-    background: str = Field(description="Methodological tradition and evidence base")
-    methods_summary: str | None = Field(
-        default=None,
-        description="Cluster-level methods scratchpad from synthesis; unused in debate",
-    )
-    reasoning_style: ReasoningStyle
-    evaluation_lens: EvaluationLens
-    references: list[str] = Field(description="Paper IDs anchoring the persona")
-    instructions: list[str] = Field(
-        description="Behavioral rules for debate",
-        min_length=3,
-        max_length=5,
+    references: list[str] = Field(
+        description="Paper IDs of the cluster papers this persona represents."
     )
     constraints: str | None = None

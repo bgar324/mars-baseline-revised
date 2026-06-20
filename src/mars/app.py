@@ -1,4 +1,3 @@
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -6,9 +5,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from mars.api.dependencies import get_s2
-from mars.api.router import debate_router, query_router
+from mars.api.router import query_router
+from mars.logging import configure_logging
 
-logging.getLogger("absl").setLevel(logging.ERROR)
+configure_logging()
 
 
 @asynccontextmanager
@@ -25,4 +25,3 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(query_router)
-app.include_router(debate_router)
