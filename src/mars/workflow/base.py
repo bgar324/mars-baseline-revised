@@ -22,6 +22,7 @@ from mars.schemas.query import (
 class WorkflowContext:
     query_id: str
     raw_text: str
+    mode: str = "auto"
     extracted: ExtractedQuery | None = None
     expansion: QueryExpansion | None = None
     questions: HypotheticalQuestions | None = None

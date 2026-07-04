@@ -32,7 +32,9 @@ def clip(text: str | None, limit: int) -> str | None:
 def agent_lines(others: list[Persona]) -> str:
     if not others:
         return "No other agents."
-    return "\n".join(f"- {a.name}: {a.framing}" for a in others)
+    return "\n".join(
+        f"- {a.name} [evidence: {a.evidence_relation}]: {a.framing}" for a in others
+    )
 
 
 def turn_log(turns: list[AgentTurn], names: dict[str, str] | None = None) -> str:

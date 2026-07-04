@@ -1,8 +1,10 @@
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Coroutine
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from loguru import logger as _logger
 
 from mars.api.dependencies import get_pipeline
 from mars.models.debate import Debate, Synthesis
@@ -11,14 +13,33 @@ from mars.models.s2 import Paper
 from mars.schemas.event import (
     ClusterAssignment,
     ClusterGroup,
+    DebateRunRequest,
     PipelineState,
     QueryRequest,
+    StageName,
 )
 from mars.schemas.query import ExtractedQuery
 from mars.workflow.base import WorkflowContext
 from mars.workflow.pipeline import NotFoundError, Pipeline
 
 query_router = APIRouter(prefix="/api/v1/queries", tags=["queries"])
+
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
+
+
+def _spawn(coro: Coroutine[Any, Any, Any]) -> None:
+    task = asyncio.create_task(coro)
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_on_task_done)
+
+
+def _on_task_done(task: asyncio.Task) -> None:
+    _BACKGROUND_TASKS.discard(task)
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        _logger.opt(exception=exc).error("background pipeline task crashed")
 
 
 def require_state(query_id: str, pipeline: Pipeline) -> PipelineState:
@@ -40,9 +61,31 @@ async def create_query(
     request: QueryRequest,
     pipeline: Pipeline = Depends(get_pipeline),
 ) -> PipelineState:
-    state = pipeline.create_query(request.query)
-    asyncio.create_task(pipeline.run_all(state.query_id))
+    state = pipeline.create_query(request.query, request.mode)
+    if request.mode == "manual":
+        _spawn(pipeline.run_all(state.query_id, stop_before=StageName.DEBATE))
+    else:
+        _spawn(pipeline.run_all(state.query_id))
     return state
+
+
+@query_router.post("/{query_id}/debate")
+async def run_debate(
+    query_id: str,
+    request: DebateRunRequest,
+    pipeline: Pipeline = Depends(get_pipeline),
+) -> PipelineState:
+    ctx = require_context(query_id, pipeline)
+    pool = ctx.persona_pool or ctx.personas
+    chosen = set(request.cluster_ids)
+    ctx.personas = [p for p in pool if p.cluster_id in chosen]
+    if len(ctx.personas) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Select at least 2 researchers to debate.",
+        )
+    _spawn(pipeline.run_stage(query_id, StageName.DEBATE))
+    return require_state(query_id, pipeline)
 
 
 @query_router.get("/{query_id}")
@@ -101,6 +144,21 @@ async def get_personas(
     query_id: str, pipeline: Pipeline = Depends(get_pipeline)
 ) -> list[Persona]:
     return require_context(query_id, pipeline).personas
+
+
+@query_router.get("/{query_id}/persona-pool")
+async def get_persona_pool(
+    query_id: str, pipeline: Pipeline = Depends(get_pipeline)
+) -> list[Persona]:
+    ctx = require_context(query_id, pipeline)
+    return ctx.persona_pool or ctx.personas
+
+
+@query_router.get("/{query_id}/perspectives")
+async def get_perspectives(
+    query_id: str, pipeline: Pipeline = Depends(get_pipeline)
+) -> list[int]:
+    return require_context(query_id, pipeline).perspectives or []
 
 
 @query_router.get("/{query_id}/debate")

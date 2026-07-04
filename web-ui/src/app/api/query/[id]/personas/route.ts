@@ -7,11 +7,3 @@ export async function GET(
   const { id } = await params
   return proxy(`/api/v1/queries/${id}/personas`)
 }
-
-export async function POST(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const { id } = await params
-  return proxy(`/api/v1/queries/${id}/personas`, { method: "POST" })
-}

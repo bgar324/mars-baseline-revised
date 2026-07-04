@@ -6,7 +6,7 @@ import numpy as np
 
 from mars.llm.agents.base import BaseAgent
 from mars.llm.prompts.meta import (
-    SYSTEM_INSTRUCTION,
+    SYSTEM_PROMPT,
     build_meta_cluster_block,
     build_meta_prompt,
 )
@@ -71,7 +71,7 @@ def cluster_summary(papers: list[Paper]) -> str:
 class PersonaSynthesizer(BaseAgent[PersonaDraft]):
     name: str = "persona_synthesis"
     role: str = "Synthesizes a citation-grounded paper cluster into a debating persona."
-    system_instruction: str = SYSTEM_INSTRUCTION
+    system_instruction: str = SYSTEM_PROMPT
 
     def build_input(self, context: dict[str, Any]) -> str:
         return build_meta_prompt(

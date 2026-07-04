@@ -23,41 +23,31 @@ EvaluationLens = Literal[
     "predictive_power",
 ]
 
+EvidenceRelation = Literal["direct", "analogical", "mixed", "ungrounded"]
+
 
 class PersonaDraft(BaseModel):
     methods_summary: str = Field(
-        description=(
-            "List the study designs, data modalities, populations, and model "
-            "families shared across the cluster's papers. Name specific datasets, "
-            "indices, and statistical methods only in this field. Write this field "
-            "before the others."
-        )
+        description="Designs, data modalities, populations, and model families shared across the cluster."
     )
-    name: str = Field(
-        description=(
-            "Format exactly as '{Field} · {Facet}': a discipline label, a U+00B7 "
-            "middle dot surrounded by spaces, then the cluster's distinguishing "
-            "facet (method, evaluation lens, scale, or subfocus). Example: "
-            "'Social Epidemiologist · Life-Course'."
-        )
+    evidence_relation: EvidenceRelation = Field(
+        description="How the cluster's evidence relates to the focal claim. direct: the papers study "
+        "the same system, task, phenomenon, and population as the focal claim. analogical: the papers "
+        "study a different system, task, phenomenon, or population and transfer the mechanism by "
+        "analogy. mixed: both direct and analogical evidence appear. ungrounded: no cluster evidence "
+        "supports the persona."
     )
+    name: str = Field(description="The persona's name as '{Field} · {Facet}'.")
     framing: str = Field(
-        description="One sentence stating how this cluster interprets the focal claim."
+        description="How this cluster interprets the focal claim, in one sentence."
     )
     background: str = Field(
-        description=(
-            "Name the cluster's methodological tradition and the body of evidence "
-            "it draws on. State traditions at the family level, not individual "
-            "papers."
-        )
+        description="The cluster's methodological tradition and evidence base."
     )
     reasoning_style: ReasoningStyle
     evaluation_lens: EvaluationLens
     instructions: list[str] = Field(
-        description=(
-            "Rules governing only how this persona argues during debate. Each entry "
-            "is one imperative sentence. Provide 3 to 5 entries."
-        ),
+        description="3 to 5 rules for how this persona argues in debate, each one imperative sentence.",
         min_length=3,
         max_length=5,
     )

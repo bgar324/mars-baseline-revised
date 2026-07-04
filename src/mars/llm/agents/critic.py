@@ -1,6 +1,5 @@
 from mars.llm.prompts.critic import (
-    CLASSIFY_SYSTEM,
-    DECOMPOSE_SYSTEM,
+    SYSTEM_PROMPT,
     build_classify_prompt,
     build_decompose_prompt,
 )
@@ -30,7 +29,7 @@ class CriticAgent:
     ) -> tuple[ClaimDecomposition, TokenUsage]:
         result = await self._provider.generate_structured(
             messages=[
-                {"role": "system", "content": DECOMPOSE_SYSTEM},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": build_decompose_prompt(claim, central_conflict),
@@ -50,12 +49,12 @@ class CriticAgent:
     ) -> tuple[Counterclaim, TokenUsage]:
         result = await self._provider.generate_structured(
             messages=[
-                {"role": "system", "content": CLASSIFY_SYSTEM},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": build_classify_prompt(
-                        decomposition.claim,
-                        decomposition.mechanism,
+                        decomposition.proposition,
+                        decomposition.causal_chain,
                         decomposition.assumption,
                         decomposition.weakness,
                         passage_lines(internal, external),

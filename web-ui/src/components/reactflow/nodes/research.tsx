@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useState } from "react"
 import type { Node, NodeProps } from "@xyflow/react"
-import { Check, LoaderCircle } from "lucide-react"
+import { Check, LoaderCircle, TriangleAlert } from "lucide-react"
 
 import {
   ChainOfThought,
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/chain-of-thought"
 import { TextShimmer } from "@/components/ui/text-shimmer"
 import { ChainHandle } from "@/components/reactflow/handles/chain"
+import { formatElapsed } from "@/features/hypo-canvas/use-elapsed"
 import { cn } from "@/lib/utils"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import type {
@@ -25,17 +26,15 @@ type ResearchNodeT = Node<ResearchData, "research">
 const LABEL =
   "text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground"
 
-function formatElapsed(ms: number): string {
-  return `${Math.max(0, Math.floor(ms / 1000))}s`
-}
-
 function ResearchNodeComponent({ data, selected }: NodeProps<ResearchNodeT>) {
   const stages = data.stages ?? []
   const visible = stages.filter(
-    (s) => s.status === "done" || s.status === "running",
+    (s) =>
+      s.status === "done" || s.status === "running" || s.status === "failed",
   )
   const doneCount = stages.filter((s) => s.status === "done").length
   const hasRunning = stages.some((s) => s.status === "running")
+  const hasFailed = stages.some((s) => s.status === "failed")
 
   const stageTimings = useAgentBuilderStore((s) => s.stageTimings)
   const [now, setNow] = useState(0)
@@ -46,7 +45,10 @@ function ResearchNodeComponent({ data, selected }: NodeProps<ResearchNodeT>) {
     return () => clearInterval(id)
   }, [hasRunning])
 
-  const times = Object.values(stageTimings)
+  const stageKeys = new Set<string>(stages.map((s) => s.key))
+  const times = Object.entries(stageTimings)
+    .filter(([k]) => stageKeys.has(k))
+    .map(([, t]) => t)
   const start = times.length ? Math.min(...times.map((t) => t.start)) : null
   const allEnded =
     times.length > 0 && times.every((t) => t.end !== null)
@@ -80,14 +82,20 @@ function ResearchNodeComponent({ data, selected }: NodeProps<ResearchNodeT>) {
             <ChainOfThoughtStep defaultOpen>
               <ChainOfThoughtTrigger>
                 <span className="inline-flex items-center gap-1 text-s text-muted-foreground">
-                  <span>
+                  <span className={cn(hasFailed && "text-destructive")}>
                     Pipeline · {doneCount} of {stages.length} ·{" "}
-                    {doneCount === stages.length
-                      ? `Completed${total !== null ? ` in ${formatElapsed(total)}` : ""}`
-                      : `Running… ${total !== null ? formatElapsed(total) : "0s"}`}
+                    {hasFailed
+                      ? `Failed${total !== null ? ` after ${formatElapsed(total)}` : ""}`
+                      : doneCount === stages.length
+                        ? `Completed${total !== null ? ` in ${formatElapsed(total)}` : ""}`
+                        : `Running… ${total !== null ? formatElapsed(total) : "0s"}`}
                   </span>
-                  {doneCount === stages.length && (
-                    <Check className="size-3.5 shrink-0" />
+                  {hasFailed ? (
+                    <TriangleAlert className="size-3.5 shrink-0 text-destructive" />
+                  ) : (
+                    doneCount === stages.length && (
+                      <Check className="size-3.5 shrink-0" />
+                    )
                   )}
                 </span>
               </ChainOfThoughtTrigger>
@@ -107,15 +115,20 @@ function ResearchNodeComponent({ data, selected }: NodeProps<ResearchNodeT>) {
 
 function StageRow({ stage }: { stage: ResearchStage }) {
   const isDone = stage.status === "done"
+  const isFailed = stage.status === "failed"
   return (
     <div className="animate-in fade-in-0 duration-500 flex flex-col gap-0.5">
       <div className="flex items-center gap-2">
-        {isDone ? (
+        {isFailed ? (
+          <TriangleAlert className="size-4 shrink-0 text-destructive" />
+        ) : isDone ? (
           <Check className="size-4 shrink-0 text-muted-foreground" />
         ) : (
           <LoaderCircle className="size-4 shrink-0 animate-spin text-foreground" />
         )}
-        {isDone ? (
+        {isFailed ? (
+          <span className="text-s text-destructive">{stage.name}</span>
+        ) : isDone ? (
           <span className="text-s text-muted-foreground line-through">
             {stage.name}
           </span>
@@ -123,10 +136,15 @@ function StageRow({ stage }: { stage: ResearchStage }) {
           <TextShimmer className="text-s">{stage.name}</TextShimmer>
         )}
       </div>
-      {stage.description && (
-        <span className="ml-6 text-xs text-muted-foreground">
-          {stage.description}
-        </span>
+      {isFailed && stage.error ? (
+        <span className="ml-6 text-xs text-destructive">{stage.error}</span>
+      ) : (
+        stage.description &&
+        !isDone && (
+          <span className="ml-6 text-xs text-muted-foreground">
+            {stage.description}
+          </span>
+        )
       )}
     </div>
   )

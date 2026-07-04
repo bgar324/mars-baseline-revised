@@ -30,7 +30,6 @@ import {
   rightPanelRef,
 } from "@/features/hypo-canvas/panel-refs"
 import { useSelectionStore } from "@/features/hypo-canvas/selection-store"
-import { SteerPanel } from "@/features/hypo-canvas/steer-panel"
 
 const SIDE_DEFAULT = "30%"
 const SIDE_MIN = "22%"
@@ -45,9 +44,7 @@ export default function CanvasPage() {
   const resetSession = useSessionReset()
   const leftLabel = "▦ AGENT BUILDER"
   const rightLabel =
-    selectedNodeId && /^[sd]\d+$/.test(selectedNodeId)
-      ? "▦ AGENT WORKFLOW"
-      : "▦ AGENT BUILDER"
+    selectedNodeId === "debate" ? "▦ AGENT WORKFLOW" : "▦ AGENT BUILDER"
 
   return (
     <div className="flex h-screen w-screen flex-col">
@@ -155,7 +152,6 @@ function PanelChrome({
 
 function RightPaneContent() {
   const id = useSelectionStore((s) => s.selectedNodeId)
-  if (id && /^s\d+$/.test(id)) return <SteerPanel canvasCycleId={id} />
-  if (id && /^d\d+$/.test(id)) return <DebatePanel canvasCycleId={id} />
+  if (id === "debate") return <DebatePanel />
   return <ContextPanel />
 }

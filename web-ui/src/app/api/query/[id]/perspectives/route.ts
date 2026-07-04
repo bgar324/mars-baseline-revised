@@ -5,5 +5,5 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  return proxy(`/api/v1/debates/${id}`)
+  return proxy(`/api/v1/queries/${id}/perspectives`)
 }

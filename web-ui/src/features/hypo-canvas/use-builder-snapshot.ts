@@ -10,14 +10,16 @@ export function useBuilderSnapshot(): BuilderSnapshot {
   const committed = useAgentBuilderStore((s) => s.committed)
   const focalClaim = useAgentBuilderStore((s) => s.focalClaim)
   const pipelineStages = useAgentBuilderStore((s) => s.pipelineStages)
-  const team = useAgentBuilderStore((s) => s.team)
+  const stageErrors = useAgentBuilderStore((s) => s.stageErrors)
+  const personas = useAgentBuilderStore((s) => s.personas)
   return useMemo(
     () => ({
       query: committed,
       focalClaim,
       pipelineStages,
-      team,
+      stageErrors,
+      personas,
     }),
-    [committed, focalClaim, pipelineStages, team],
+    [committed, focalClaim, pipelineStages, stageErrors, personas],
   )
 }

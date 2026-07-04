@@ -5,7 +5,7 @@ from typing import Any
 
 from mars.llm.agents.meta import PersonaSynthesizer
 from mars.llm.prompts.meta import (
-    SYSTEM_INSTRUCTION,
+    SYSTEM_PROMPT,
     build_generic_meta_block,
     build_meta_cache_block,
 )
@@ -13,7 +13,7 @@ from mars.llm.providers.base import LLMProvider
 from mars.models.persona import Persona, PersonaDraft
 from mars.models.s2 import Paper
 from mars.schemas.event import StageName
-from mars.workflow.base import BaseNode, BaseStep, WorkflowContext
+from mars.workflow.base import BaseNode, BaseStep, WorkflowContext, WorkflowError
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ async def synthesize_personas(
     if len(eligible) >= 2:
         try:
             cache_name = await provider.create_cache(
-                system_instruction=SYSTEM_INSTRUCTION,
+                system_instruction=SYSTEM_PROMPT,
                 content=build_meta_cache_block(focal_claim),
                 ttl_seconds=CACHE_TTL_SECONDS,
             )
@@ -96,12 +96,13 @@ async def synthesize_generic_personas(
     async def one(index: int) -> Persona:
         result = await provider.generate_structured(
             messages=[
-                {"role": "system", "content": SYSTEM_INSTRUCTION},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": build_generic_meta_block(focal_claim)},
             ],
             schema=PersonaDraft,
         )
         draft: PersonaDraft = result.parsed
+        draft.evidence_relation = "ungrounded"
         return Persona(cluster_id=index, references=[], **draft.model_dump())
 
     personas = await asyncio.gather(*(one(i) for i in range(n)))
@@ -144,17 +145,23 @@ class SynthesizePersonasStep(BaseStep):
     async def run(self, ctx: WorkflowContext) -> WorkflowContext:
         clusters = ctx.clusters or {}
         if self._grounded:
+            only_clusters = None if ctx.mode == "manual" else ctx.perspectives
             personas = await synthesize_personas(
                 clusters,
                 ctx.extracted.claim,
                 self._gemini,
                 self._min_cluster_size,
-                only_clusters=ctx.perspectives,
+                only_clusters=only_clusters,
             )
         else:
             n = len(eligible_clusters(clusters, self._min_cluster_size))
             personas = await synthesize_generic_personas(
                 ctx.extracted.claim, n, self._gemini
+            )
+        if not personas:
+            raise WorkflowError(
+                "No researcher personas could be formed (too few clustered papers). "
+                "Try a broader query."
             )
         ctx.persona_pool = personas
         ctx.personas = personas
@@ -177,7 +184,7 @@ class SelectPanelStep(BaseStep):
 
     async def run(self, ctx: WorkflowContext) -> WorkflowContext:
         pool = ctx.require_persona_pool()
-        if ctx.perspectives:
+        if ctx.mode != "manual" and ctx.perspectives:
             ids = set(ctx.perspectives)
             ctx.personas = [p for p in pool if p.cluster_id in ids]
         else:

@@ -18,12 +18,27 @@ from mars.llm.providers.base import (
 T = TypeVar("T", bound=BaseModel)
 
 
-def build_thinking_config(level: str | None) -> types.ThinkingConfig | None:
+THINKING_BUDGET_BY_LEVEL = {"minimal": 0, "low": 1024, "medium": 8192, "high": 24576}
+
+
+def _thinking_family(model: str) -> str:
+    name = model.removeprefix("models/").removeprefix("gemini-")
+    if name.startswith("3"):
+        return "level"
+    if name.startswith("2.5"):
+        return "budget"
+    return "none"
+
+
+def build_thinking_config(level: str | None, model: str) -> types.ThinkingConfig | None:
     if not level:
         return None
-    return types.ThinkingConfig(
-        thinking_level=getattr(types.ThinkingLevel, level.upper())
-    )
+    family = _thinking_family(model)
+    if family == "level":
+        return types.ThinkingConfig(thinking_level=getattr(types.ThinkingLevel, level.upper()))
+    if family == "budget":
+        return types.ThinkingConfig(thinking_budget=THINKING_BUDGET_BY_LEVEL.get(level.lower(), -1))
+    return None
 
 
 def prepare_contents(
@@ -90,6 +105,10 @@ class GeminiProvider(LLMProvider):
             config=settings,
         )
 
+    @property
+    def client(self) -> genai.Client:
+        return self._client
+
     def _build_config(
         self,
         *,
@@ -106,7 +125,7 @@ class GeminiProvider(LLMProvider):
         )
         if not thinking_disabled:
             thinking_config = build_thinking_config(
-                thinking_level or cfg.thinking_level
+                thinking_level or cfg.thinking_level, cfg.model
             )
             if thinking_config is not None:
                 kwargs["thinking_config"] = thinking_config

@@ -4,6 +4,7 @@ from typing import Any
 
 import hdbscan
 import numpy as np
+from loguru import logger
 
 from mars.config.pipeline import (
     ClusterAlgorithm,
@@ -158,6 +159,11 @@ def normalize_embeddings(matrix: np.ndarray, mode: Normalization) -> np.ndarray:
     raise ValueError(f"unknown normalization mode: {mode}")
 
 
+clog = logger.bind(source="workflow.cluster", stage="cluster")
+
+CLUSTER_LOCK = asyncio.Lock()
+
+
 class ClusterPapersStep(BaseStep):
     name = "cluster.cluster_papers"
     event = "clusters.generated"
@@ -170,7 +176,14 @@ class ClusterPapersStep(BaseStep):
         self._config = config
 
     async def run(self, ctx: WorkflowContext) -> WorkflowContext:
-        ctx.clusters = await asyncio.to_thread(cluster_papers, ctx.papers, self._config)
+        async with CLUSTER_LOCK:
+            clog.info("lock | acquired, clustering {} papers", len(ctx.papers))
+            ctx.clusters = await asyncio.to_thread(
+                cluster_papers, ctx.papers, self._config
+            )
+            clog.info(
+                "lock | released, {} clusters", len(ctx.clusters or {})
+            )
         return ctx
 
     def summarize(self, ctx: WorkflowContext) -> dict[str, Any]:

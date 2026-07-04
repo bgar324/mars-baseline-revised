@@ -1,599 +1,230 @@
-JUDGE_SYSTEM = """Judge a structured scientific debate.
+SYSTEM_PROMPT = """## ROLE
+You are a neutral adjudicator of a structured scientific debate. You do not advocate for any position.
 
-- Take no position.
-- Read the entire transcript before writing.
-- Use only claims, evidence, frameworks, and acronyms that appear in the transcript.
-- When the transcript shows partial agreement, report it as partial; otherwise keep opposing views distinct.
-- Name agents by name. Put raw paper_id/turn_id/agent_id strings only in schema fields that ask for ids."""
-
-
-ADJUDICATION_SYSTEM = """Judge a structured scientific debate. Decide what became clearer and what remains unresolved about the focal claim.
-
-- Take no position on any agent, view, or hypothesis.
-- Use only the focal claim, central conflict, transcript, cross-examination evidence, and counterclaims provided.
-- Add no outside claims, paper titles, citations, frameworks, examples, acronyms, or terminology.
-- When the transcript shows a refinement, report it as a refinement; do not state full consensus.
-- Use cited papers only to judge support; use agent turns only to identify claims, concessions, refinements, and disagreements.
-- Write about mechanisms, findings, and open questions, not about who argued what.
-- Name opposed views with short descriptive labels derived from the central conflict.
-- State resolved items as what became clearer; state unresolved items as what still needs testing."""
+## CONSTRAINTS
+- Read the full input before writing.
+- Use only the claims, evidence, mechanisms, findings, and terminology that appear in the input.
+- Write for a researcher in a nearby field who knows scientific methods but not this subfield's shorthand. Use technical terms when needed, but pair abstract constructs with what they do or how researchers would observe them. Prefer concrete actor-action sentences.
+- Copy corpus_ids verbatim into grounding or evidence fields only; never invent one.
+- When uncertain, prefer disagreement over agreement and question over assumption."""
 
 
-SYNTHESIS_SYSTEM = """Write a standalone research artifact: problem, previous work, reasoning, and a hypothesis, for researchers in a scientific field.
-
-- Treat the supplied findings and evidence as the field's literature.
-- Write about the subject matter only; do not mention a debate, panel, agents, personas, or positions taken.
-- Use only the material provided; add nothing from outside it.
-- State each construct as something a researcher could build or measure; do not leave an abstract label alone."""
-
-
-SELECT_SYSTEM = """Select which candidate hypothesis captures the central unresolved question of a research problem: the claim prior findings leave open and most need resolved.
-
-- Judge candidates on substance, not on which is safest, broadest, or best-supported.
-- Write about the approaches, mechanisms, and findings in the field's own terms."""
-
-
-ASSESSMENT_PROMPT = """# AGENTS
-
+ASSESSMENT_PROMPT = """## AGENTS
 {agents}
 
-# FOCAL CLAIM
-
+## FOCAL CLAIM
 {focal_claim}
 
-# OPENING STATEMENTS
-
+## PROPOSALS
 {turns}
 
-# TASK
+## TASK
+Extract each agent's stance and the points of disagreement that set up the rebuttal round. Do not name a winner or resolve any disagreement.
 
-Name the positions and clashes for a rebuttal round.
-
-Use only the agents and opening statements above. Do not name a winner, score agents, resolve disputes, or write a final answer.
-
-# WRITE
-
-Return these fields:
-
-- stances: one sentence per agent stating the position the agent commits to. State the claim, not the topic.
-- points_of_agreement: propositions stated by two or more agents.
-- points_of_disagreement: each entry names the agents, one disagreement type, and the exact incompatibility.
-- central_conflict: one contested question with two opposed poles, spanning the focal claim's full breadth.
-- critiques: each entry names who responds to whom, the relation (challenge | support | concede), and one precise point to engage.
-- open_questions: questions left open by the proposals above; add no new issues.
-- disagreement_present: false when the openings converge, when the only difference is stylistic or methodological wording, or when a central conflict would have to be invented; true otherwise.
-
-# DISAGREEMENT TYPES
-
-Classify a disagreement type by its operational condition:
-
-- primacy: the agents claim different factors matter most.
-- mechanism: the agents claim different causal paths to the same outcome.
-- sufficiency: one agent claims a factor is enough; another claims it is not.
-- definition: the agents assign different meanings to the same construct.
-- scope: the agents claim the same effect holds in different populations or settings.
-- evidence_standard: the agents require different evidence to accept the claim.
-
-# CONSTRAINTS
-
-- State each point as a precise proposition, not a broad theme.
-- Classify two methods as disagreement only when they imply incompatible claims about primacy, sufficiency, mechanism, definition, scope, or evidence standard.
-- When two agents are compatible, mark the relation support or refinement, not challenge.
-- When an agent's claim fits both poles, mark it orthogonal to the central conflict; do not seat it in opposition.
-- A bridge position must clarify the central conflict's axis, not introduce a third topic.
-- central_conflict and critiques must match the stances in the openings."""
+## WRITE
+- overview: a short neutral statement of where the debate stands after the proposals.
+- stances: one explicit position per agent.
+- points_of_agreement: only propositions explicitly shared by two or more agents.
+- points_of_disagreement: each disagreement names the agents and the precise disputed point.
+- central_conflict: the one unresolved disagreement most central to the focal claim, stated on both sides as two conflicting positions.
+- critiques: who should challenge whom, on what.
+- open_questions: open questions raised in the proposals.
+- disagreement_present: true if the proposals contest a genuine axis (mechanism, priority, or sufficiency) even when they share the focal claim's direction; false only if the proposals are redundant with no axis to contest."""
 
 
-ADJUDICATION_PROMPT = """# INITIAL RESEARCH QUERY
-
+ADJUDICATION_PROMPT = """## INITIAL RESEARCH QUERY
 {research_query}
 
-# FOCAL CLAIM
-
+## FOCAL CLAIM
 {focal_claim}
 
-# CENTRAL CONFLICT
-
+## CENTRAL CONFLICT
 {central_conflict}
 
-# TRANSCRIPT
-
+## TRANSCRIPT
 {turns}
 
-# CROSS-EXAMINATION EVIDENCE
-
-Passages retrieved from each agent's cited papers to test whether the literature supports that agent's claim on the central conflict.
-
-When an agent has no passages, treat its claim as weakly supported. Do not treat missing passages as neutral.
-
+## CROSS-EXAMINATION EVIDENCE
+Cross-examination passages come from each agent's cited papers. An agent with no passages is weakly supported, not neutral. An agent whose passages study a different domain, population, task, or system than the focal claim is supported only by analogy, not directly. Each agent's evidence relation (direct / analogical / mixed / ungrounded) is shown with its passages; verify it against the passages.
 {cross_examination}
 
-# COUNTERCLAIMS
-
-Each line is a counterclaim against one agent's position, with a status.
-
-- grounded: a retrieved passage attests the weakness.
-- predictive: no passage attests the weakness, but the weakness follows from the claim's own logic.
-- rejected or None: do not use.
-
+## COUNTERCLAIMS
+Each is a weakness against one agent's position, with a status.
+- grounded: a passage supports it.
+- predictive: it follows from the claim's own logic.
 {counterclaims}
 
-# TASK
+## TASK
+Extract what the debate resolved and what remains unresolved about the central conflict.
 
-Decide what became clearer and what remains unresolved about the CENTRAL CONFLICT.
+## REASONING ORDER
+1. List what the agents agree on.
+2. List what the cross-examination passages directly support: an established phenomenon (the pattern is observed) or a supported mechanism (evidence backs a cause).
+3. Mark positions resting only on analogical or ungrounded evidence — they can motivate a question but cannot settle one.
+4. Name the relation still contested: "which account is primary" stays unresolved even when every agent named the phenomenon.
+5. State the test that would decide each contested relation.
 
-Write a field-level overview. Keep the main mechanisms, conditions, and open comparisons that help answer the FOCAL CLAIM. Do not preserve every narrow paper detail, method detail, benchmark detail, or agent-specific phrasing.
-
-Use only the material above. Add no outside claims, evidence, frameworks, examples, citations, paper titles, agent names, or new terminology.
-
-# REASONING SEQUENCE
-
-Work through these steps before writing the JSON.
-
-Step 1: Identify the two views.
-Restate the central conflict as two broad subject-matter views. Use terms from the CENTRAL CONFLICT, not agent names.
-
-Step 2: Identify the final positions.
-For each agent, use the final claim, revised claim, concession, and message. Do not rely on action labels alone.
-
-Count a concession only when the agent weakens its own earlier claim and states a revised position.
-
-Step 3: Check support.
-Use cross-examination evidence to decide whether each final position is directly supported, weakly supported, mixed, or untested.
-
-A cited paper supports a claim only when the retrieved passage directly supports that claim.
-
-If the evidence can support more than one interpretation, or if the claim is plausible but not directly tested, keep the issue unresolved.
-
-Step 4: Reduce the debate.
-Convert agent-specific claims into field-level claims about the FOCAL CLAIM.
-
-Keep:
-- the main mechanism
-- the main outcome
-- the scope where the mechanism holds
-- the comparison that remains unsettled
-
-Drop:
-- one paper's setup
-- one benchmark detail
-- one model family unless the focal claim requires it
-- one metric unless the evidence only supports that metric
-- one isolated method
-- agent-specific wording
-- side issues that do not answer the focal claim
-
-Step 5: Decide what became clearer.
-A point is resolved only when the transcript and cross-examination evidence support it and no grounded counterclaim overturns it.
-
-Write resolved points as broad takeaways, not narrow findings.
-
-Step 6: Decide what still needs testing.
-A point is unresolved when agents still disagree, evidence is mixed, evidence is indirect, or the deciding comparison was not tested.
-
-A predictive counterclaim becomes an unresolved issue.
-
-Step 7: Compress.
-Combine narrow points that support the same broader takeaway. Prefer one clear overview claim over several niche claims.
-
-# WRITE
-
-Return exactly this JSON shape:
-
-{{"reasoning": "", "resolved": [], "unresolved": []}}
-
-- reasoning:
-  4 to 6 sentences. Name the two broad views, state what became clearer or more conditional, and explain what this means for the focal claim or initial research query.
-
-- resolved:
-  2 to 4 strings. Each string is one broad takeaway about what became clearer.
-  Each item must answer the focal claim, name the mechanism, and state the scope or condition where it holds.
-
-- unresolved:
-  2 to 4 strings. Each string is one broad open question.
-  Each item must name the disputed relation and the comparison or condition that would decide it.
-
-# STYLE
-
-Write like a concise literature-review overview.
-
-Good resolved item:
-"Provenance records clarify authorship when they document both user actions and AI contributions."
-
-Good unresolved item:
-"Whether authorship should be judged by interaction records or institutional intent standards remains unresolved."
-
-Avoid:
-"Whether the interaction between visual timeline interfaces and immutable W3C metadata logs dominates standalone qualitative provenance systems in high-stakes authorship attribution remains unresolved."
-
-Avoid:
-"X affects Y positively, strongest in Z, holding A constant."
-
-# FINAL CHECK
-
-Before returning, rewrite any resolved or unresolved item that:
-- is mainly about one paper, benchmark, model, method, or interface
-- repeats an agent's wording too closely
-- contains several stacked conditions
-- would not read as a high-level literature-review takeaway
-- is narrower than the focal claim
-- uses obscure implementation detail where a broader mechanism would suffice
-- lists the same idea in both resolved and unresolved
-- uses "relates to," "impacts," or "affects" without naming the mechanism
-
-Do not write "more research is needed."
-Do not write a final hypothesis.
-Do not rank, score, select candidates, or name a winner.
-Do not include raw paper IDs, agent names, paper titles, author-year citations, or invented citations.
-Do not use "Position A," "Position B," "side one," or "side two."
-Keep each resolved and unresolved string under 30 words.
-Return only valid JSON."""
+## WRITE
+- reasoning: 4 to 6 sentences on how the debate changed the central conflict.
+- resolved: 2 to 4 points the debate settled, each backed by direct evidence, with the condition where it holds. Do not list a claim any unresolved question still contests.
+- unresolved: 2 to 4 open questions, each a specific testable relation (which mechanism drives which outcome under which condition), not a broad theme, and the evidence that would decide it."""
 
 
-HYPOTHESIS_PROMPT = """# FOCAL CLAIM
-
+HYPOTHESIS_PROMPT = """## FOCAL CLAIM
 {focal_claim}
 
-# TRANSCRIPT
-
+## TRANSCRIPT
 {turns}
 
-# ADJUDICATION
-
+## ADJUDICATION
 {adjudication}
 
-# TASK
+## TASK
+Extract distinct, testable hypotheses that follow from the debate and address the focal claim. Write a hypothesis only when at least one corpus_id in the transcript supports its mechanism or outcome. Do not write overlapping paraphrases of the same hypothesis. Generalize each claim to the level of the focal claim, away from any single paper or agent: keep the mechanism, outcome, and context; drop a paper's setup, benchmark, or an agent's framing. Do not write a hypothesis too narrow to address the focal claim.
+- State the mechanism at the construct level. Replace paper-, dataset-, benchmark-, or example-specific details with the broader construct named in the focal claim. Do not add constructs the focal claim, transcript, adjudication, or evidence does not support.
+- If the focal claim asks about stages, conditions, thresholds, validity boundaries, "under what conditions," or an explicit partition such as "which X transfer and which do not", prefer a hypothesis with a scope partition: where the claim holds, where it fails, and what boundary separates the two.
+- Do not broaden the hypothesis by inventing scope cases, boundaries, remedies, or interventions. Each scope case must be supported by the transcript, adjudication, or cited evidence.
 
-Extract the hypotheses that follow from the debate.
+When the adjudication's unresolved question is how two accounts compare, write a comparative hypothesis that states which account is primary, which is conditional, which holds earlier, or which holds more broadly. Do not force a comparison the transcript or adjudication does not support.
 
-Do not treat every agent claim as a hypothesis. A hypothesis should capture a claim that helps answer the focal claim after the debate has exposed what is supported, what is limited, and what remains unsettled.
+## REASONING ORDER
+For each hypothesis, work these steps in order, then write the fields:
+1. Classify the claim_type the research problem needs: a problem about bias correction needs a comparative or causal claim about reduction, not a descriptive measurement claim.
+2. State the proposition in that logical form.
+3. Build the causal_chain (or explanatory pathway) from exposure to outcome.
+4. Specify the study design that would test the proposition.
+5. Write the warrant: why the causal_chain and evidence support the proposition; when the adjudication names a competing account, why this pathway beats or refines it.
+6. Write the falsifier: the observed result that would negate it.
+7. Attach the grounding corpus_ids.
 
-Use only the transcript and adjudication. Do not rank, score, select, or mark a best hypothesis.
+## WRITE
+For each hypothesis:
+- claim_type: descriptive, comparative, associative, causal, or predictive. The proposition's main verb must match the claim_type. Use comparative only when the proposition itself names both compared conditions.
+- proposition: one plain, testable sentence in the claim_type's logical form. Name the measured outcome and predicted direction when the claim involves change, difference, association, causation, or prediction. Comparative propositions must name both compared conditions.
+- If the focal claim asks about stages, conditions, thresholds, validity boundaries, "under what conditions," or an explicit partition such as "which X transfer and which do not", the proposition may use a scope partition: it should name the valid case, the invalid case, and the boundary between them.
+- A scope-partition proposition may exceed 25 words. Each clause must add one grounded scope case, boundary, or intervention/moderator.
+- If the adjudication or evidence names an intervention, remedy, or moderator, the proposition may include it as a condition, such as "unless coupled to X" or "under design Y." Do not invent an intervention to broaden the hypothesis.
+- Keep the proposition as broad as the focal claim. When a finding comes from one narrow setting, such as a single industry, application, or dataset, name that setting in study_design.context and leave it out of the proposition, unless the focal claim is itself about only that setting.
+- causal_chain: the mechanism or explanatory pathway as a compact sequence (A -> B -> C) naming the mediator or process. For a non-causal claim_type (associative, comparative, predictive), state that logic without claiming causation.
+- study_design.context: the setting, population, task, or domain.
+- study_design.exposure: the main condition, intervention, or observed factor.
+- study_design.comparator: the baseline or rival condition the exposure is compared against.
+- study_design.outcome: the construct being evaluated; may be abstract when the measure makes it observable.
+- study_design.measure: the observable metric that tests the outcome.
+- warrant: why the causal_chain and evidence support the proposition; do not restate the proposition or causal_chain. When the adjudication names a competing account, explain why this pathway beats or refines that account.
+- falsifier: one observed result, stated against the measure, that would negate the proposition.
+- grounding: corpus_ids supporting the mechanism, outcome, or pattern, at least one.
+- contributing_agents: the agents whose arguments the hypothesis draws on.
 
-Admit a hypothesis only when at least one real corpus_id from an `Evidence (corpus_ids)` line in the transcript supports its core mechanism or outcome. Copy corpus_ids verbatim. Use paper IDs only, never paper titles.
-
-# REASONING SEQUENCE
-
-Work through these steps before writing the output.
-
-Step 1: Find the central question.
-Restate, silently, what the focal claim is really asking. Use this to ignore side claims, paper details, and agent-specific wording.
-
-Step 2: Identify the live claims.
-Keep only claims that directly answer the focal claim. Drop claims that are background, method descriptions, examples, or evidence details.
-
-Step 3: Separate settled claims from open claims.
-A settled claim is directly supported by the transcript and grounding.
-An open claim is plausible but still disputed, conditional, or not directly tested.
-
-Do not turn every open claim into a hypothesis. Keep only open claims that would make a useful research prediction.
-
-Step 4: Compress each claim.
-For each remaining claim, reduce it to:
-- what changes
-- what outcome changes
-- why it changes
-- where the claim applies
-
-If the claim cannot be reduced this way, drop it.
-
-Step 5: Write the statement plainly.
-Write the statement as a sentence a researcher might actually use.
-
-Do not write a sentence that sounds like a filled template.
-
-Do not include controls, caveats, and every qualifier in the statement. Put those in their own fields.
-
-Step 6: Check grounding.
-Keep the hypothesis only if at least one real corpus_id from an `Evidence (corpus_ids)` line supports the core mechanism or outcome.
-
-Use paper IDs only. Do not use paper titles.
-
-# DISTINCTNESS
-
-Emit one hypothesis only when it makes a genuinely different prediction about:
-- the main mechanism
-- the main outcome
-- the condition where the mechanism holds
-- the comparison that would decide an unresolved issue
-
-Do not emit a separate hypothesis just because one agent cited a different paper, method, benchmark, model, or metric.
-
-Do not force a comparative or conditional hypothesis unless the transcript or adjudication supports that relation.
-
-# WRITE
-
-For each hypothesis, return these fields:
-
-- statement:
-  One plain, testable sentence under 25 words.
-  Say what is expected to change and in what setting.
-  Name the outcome and direction.
-  Include scope or condition only when needed.
-  Do not include controls.
-
-- relationship:
-  positive | negative | non-linear.
-
-- is_relational:
-  true only when the statement compares, orders, conditions, or relates two mechanisms.
-  false for one mechanism.
-  A relational statement must make one claim about the relation. Do not bundle mechanisms.
-
-- mechanism:
-  One short causal chain under 25 words.
-  Use the form: "X changes Y, which changes Z."
-  Do not bundle multiple chains.
-  Put background conditions in assumptions.
-
-- variables:
-  independent, dependent, and any mediators and moderators.
-  Use simple construct names from the transcript or evidence.
-  Do not invent new construct labels.
-
-- controls:
-  Variables held constant to isolate the independent variable.
-  Each control must be distinct from the independent variable and must not be a variable the mechanism runs through or produces.
-  Do not repeat controls in the statement.
-
-- assumptions:
-  Conditions required for the hypothesis to hold but not part of the causal chain.
-  List only essential assumptions.
-
-- falsifier:
-  One observed result that would negate the statement's predicted direction.
-  Do not introduce a new variable.
-
-- scope:
-  The population, task setting, model class, or domain where the hypothesis applies.
-
-- grounding:
-  corpus_ids copied verbatim from the transcript.
-  Use paper IDs only.
-  Include at least one corpus_id.
-
-- contributing_agents:
-  Agents whose arguments contributed to the hypothesis.
-
-# WRITING STANDARD
-
-Prefer simple research prose.
-
-Good:
-"In high-stakes writing contexts, provenance records should improve authorship attribution."
-
-Good:
-"Visual interaction histories should improve writers' ability to recognize AI influence in collaborative writing."
-
-Good:
-"Metadata logs should make authorship claims more verifiable across multi-agent writing systems."
-
-Avoid:
-"X affects Y positively, strongest in Z, holding A constant."
-
-Avoid:
-"X impacts Y through Z."
-
-Avoid:
-"X relates to Y."
-
-Avoid:
-"The integration of abstract mechanism A with abstract mechanism B affects abstract outcome C."
-
-# CLAIM STRENGTH
-
-Use settled wording only when the adjudication resolves the relation and the transcript contains a genuine concession supporting it.
-
-Otherwise phrase the statement as a prediction:
-- "should"
-- "is expected to"
-- "is predicted to"
-- "may"
-
-Use "necessary" or "sufficient" only when the evidence directly supports that logical strength.
-
-# FINAL CHECK
-
-Before returning, remove any hypothesis that:
-- is mostly about one paper, benchmark, method, model, metric, or interface
-- repeats an agent's wording
-- contains more than one causal chain
-- puts controls inside the statement
-- uses vague verbs without direction
-- introduces constructs not present in the transcript or adjudication
-- is too broad for the grounding
-- is too narrow to answer the focal claim
-- has empty grounding
-
-Do not rank, score, select, or mark a best hypothesis.
-Do not include raw paper titles, author-year citations, or invented terminology.
-Do not write a meta-review or final synthesis.
-Return only the full hypothesis set as valid JSON."""
+## CLAIM STRENGTH
+- Match the proposition's strength to the evidence; avoid absolutes (always, never, all, every, everyone). Use resolved wording only when the adjudication resolves the relation; otherwise hedge (may, is predicted to, is associated with, should).
+- The measure must be independent of the exposure. Do not test an intervention with a metric defined by the intervention's own design goal, label, or construction criteria. Prefer held-out ground truth, blinded ratings, behavioral outcomes, or an external benchmark.
+- Use "necessary" only when the design removes or blocks the condition and tests whether the outcome fails. Use "sufficient" only when the condition alone produces the outcome. Do not write "more necessary." Use "primary" or "takes precedence" only when the design compares both accounts on the same measure; otherwise write a plain comparative such as "X reduces Y more than Z."
+- Use precise verbs that match claim_type (detect, quantify, distinguish; reduce, attenuate; outperform, explain more variance than; predict, forecast; cause, mediate, moderate); avoid vague verbs (address, capture, handle, improve, affect)."""
 
 
-SELECT_PROMPT = """# CENTRAL CONFLICT
+SELECT_PROMPT = """## PROBLEM
+{research_query}
 
+## CENTRAL CONFLICT
 {central_conflict}
 
-# UNRESOLVED POINTS
-
+## UNRESOLVED
 {unresolved}
 
-# CANDIDATE HYPOTHESES
-
+## CANDIDATE HYPOTHESES
 {candidates}
 
-# TASK
+## TASK
+Choose the one hypothesis that best addresses the central unresolved question. Use novelty and feasibility as tie-breakers, not as substitutes for relevance.
 
-Select the one hypothesis that best captures the central unresolved question of the debate: the question the adjudication left open, not the safest, broadest, or best-supported standalone claim.
+When the central conflict is between two competing accounts, prefer the candidate that tests that comparison directly over one that restates a single agent's position, provided the comparison is testable from the candidate's proposition and grounding. If the central conflict explicitly contrasts two competing accounts, prefer a candidate whose proposition names both accounts or states their comparison directly. Do not prefer a comparative candidate on naming both accounts alone: its comparator, measure, warrant, and falsifier must be at least as strong as the best single-mechanism candidate.
 
-# REASONING SEQUENCE
+Apply this viability check before novelty and feasibility. The chosen candidate must:
+1. answer the central unresolved question,
+2. name both competing accounts when the central conflict is between competing accounts,
+3. specify an observable measure independent of the exposure,
+4. specify a comparator,
+5. not claim a relation resolved that the adjudication left unresolved,
+6. have a claim_type that matches what the research problem needs.
+Reject any candidate that uses a measure defined by the exposure's own label, goal, or construction criteria; that uses "necessary", "sufficient", "primary", or "takes precedence" without a design that can establish that claim; or that uses the phrase "more necessary".
 
-Work through these steps before writing the JSON.
+After the viability check, apply scope coverage:
+- Prefer the candidate that covers more of the central unresolved question.
+- Prefer a candidate with a grounded scope partition over a single-condition hypothesis when the research problem asks about stages, conditions, thresholds, validity boundaries, "under what conditions," or an explicit partition such as "which X transfer and which do not".
+- A grounded scope partition must name at least two of the following: where the claim holds, where it fails, or the boundary between them.
+- Scope coverage never overrides viability. Do not select a broader candidate if it has a circular measure, missing comparator, weak falsifier, ungrounded scope case, invented intervention, or modal claim the design cannot establish.
+- A scope-covering candidate must keep the focal phenomenon the research question names and tie it to an observable measure. Do not prefer a broader candidate that replaces the focal phenomenon with a generic abstraction.
 
-Step 1: Identify the unresolved question.
-Read the CENTRAL CONFLICT and UNRESOLVED POINTS. Decide what issue most needs testing.
-
-Step 2: Filter candidates.
-Keep only candidates that directly answer the central conflict or at least one unresolved point.
-
-Step 3: Prefer the candidate that tests the unresolved relation.
-When the unresolved issue asks how two mechanisms compare, prefer a candidate that states that comparison.
-
-Do not prefer a relational candidate merely because it is relational. Prefer it only when its statement, mechanism, and grounding make the comparison testable.
-
-Step 4: Avoid peripheral support.
-Do not select a well-supported candidate if it answers a side issue rather than the central unresolved question.
-
-Step 5: Break ties.
-If candidates remain tied, select the one with the clearer falsifier and tighter variables.
-
-# WRITE
-
-Return exactly this JSON shape:
-
-{{ "candidate_id": "", "reason": "" }}
-
-- candidate_id:
-  The id of the selected candidate.
-
-- reason:
-  A subject-matter claim that names the competing mechanisms, findings, or positions and states why the selected hypothesis addresses the central unresolved question better than the alternatives.
-
-# CONSTRAINTS
-
-- Do not select a candidate that restates one agent's opening claim unless no relational or unresolved-focused candidate is comparably testable.
-- Do not select a well-supported peripheral candidate over a testable candidate that targets the unresolved relation.
-- Do not write the reason as a comment about the prompt.
-- Return only the JSON object."""
+## WRITE
+- candidate_id: the id of the winning hypothesis (e.g. H2).
+- reason: one sentence on why the winner best addresses the unresolved question, naming the competing accounts when the central conflict is between them."""
 
 
-SYNTHESIS_PROMPT = """# FOCAL CLAIM
-
+SYNTHESIS_PROMPT = """## FOCAL CLAIM
 {focal_claim}
 
-# RESEARCH PROBLEM
-
+## RESEARCH PROBLEM
 {problem}
 
-# CENTRAL CONFLICT
-
+## CENTRAL CONFLICT
 {central_conflict}
 
-# POSITIONS
+## CANDIDATE HYPOTHESES
+{candidates}
 
-{positions}
-
-# EVIDENCE
-
+## EVIDENCE
 {evidence}
 
-# SETTLED
+## RESOLVED
+{resolved}
 
-{settled}
+## UNRESOLVED
+{unresolved}
 
-# CONTESTED
-
-{contested}
-
-# SELECTED CANDIDATE
-
+## SELECTED CANDIDATE
 {best}
 
-# TASK
+## TASK
+Write a four-part research artifact for a researcher in this field. Write only about the subject matter, not the debate, the agents, or who argued what.
 
-Write a four-part research artifact for a researcher in this field.
+Write in clear, evidence-calibrated scientific prose: readable without becoming casual, precise without becoming mechanical.
 
-The SELECTED CANDIDATE fixes the main mechanism, direction, comparison, and scope. Preserve those elements, but rewrite them clearly and naturally.
+Build the artifact from the selected candidate's claim_type, causal_chain, comparator, context, and measure, keeping them intact.
 
-Do not mention agents, debate turns, adjudication, selected candidates, or who argued what.
+If the central conflict is between two competing accounts, preserve it as a comparative hypothesis rather than reducing it to a single account.
 
-Use only the provided material.
+Polish and align the prose to the focal claim: replace vague verbs, soften overstrong causal language, and correct a claim_type that does not match the problem. Do not invent a missing comparator or measure or otherwise rescue an under-specified candidate.
 
-# REASONING SEQUENCE
+Before writing the hypothesis, lock the scientific content: focal phenomenon, measured outcome, comparison, predicted direction, and any grounded boundary, intervention, or moderator. Preserve that content, but do not preserve abstract wording from the selected candidate when a clearer phrase says the same thing.
 
-Work through these steps before writing the JSON.
+## WRITE
+- problem: 1 to 2 sentences naming the setting, the unresolved difficulty, and why it matters.
+- previous_work: 4 to 6 sentences grouping prior findings into lines of work, ending with what is resolved versus unresolved.
+- reasoning: start with the general mechanism that explains the selected candidate. State it at the construct level, without naming a specific paper, dataset, benchmark, or example. Then explain how that mechanism produces the selected prediction. If a competing account is central, name it and explain whether the selected mechanism limits, refines, outperforms, or depends on it.
+- hypothesis: write one or two testable sentences for a researcher in a nearby field. Use one sentence for simple claims. Use two short sentences when the hypothesis includes both a comparison and a boundary.
 
-Step 1: Name the research setting.
-Identify the familiar field setting from the RESEARCH PROBLEM.
+  First preserve the scientific content:
+  - the focal phenomenon from the research question;
+  - the measured outcome;
+  - the comparison;
+  - the predicted direction;
+  - any grounded boundary, intervention, or moderator.
 
-Step 2: Name the unresolved difficulty.
-Explain what remains hard to determine and why it matters.
+  Then write it naturally:
+  - preserve the focal term the research question uses, such as safety theater, validity, leakage, oversight, trust decay, or factual inconsistency;
+  - translate surrounding abstract phrases into what actors do, what changes, or what researchers measure;
+  - hedge unless the evidence establishes the relation;
+  - avoid absolutes.
 
-Step 3: Organize previous work.
-Group the evidence into a few lines of work. For each line, state what it studies, what it establishes, and what it leaves open.
+  If the research problem explicitly asks for stages, conditions, thresholds, validity boundaries, "under what conditions," or an explicit partition such as "which X transfer and which do not," use a scope partition. Name at least two of the following: where the claim holds, where it fails, or the boundary between them.
 
-Step 4: Build one causal chain.
-Explain why the selected mechanism should produce the outcome.
+  Use this form when it fits: "<focal phenomenon> holds when <observable condition>, but breaks when <observable condition>; the boundary is <measured threshold or condition>."
 
-Use one chain:
-X changes Y, which changes Z, so W.
+  If the evidence names an intervention, remedy, or moderator, include it as an explicit condition. Do not invent one.
 
-Step 5: Answer the rival account.
-Name the rival account from CONTESTED. Explain why the selected mechanism is expected to matter under the stated condition.
+  If the central conflict compares two accounts, name how the accounts relate: primacy, boundary, threshold, interaction, sequencing, or scope difference.
 
-Step 6: Write the hypothesis.
-Write one testable sentence. Keep the comparison. Include the boundary condition or control only when present in the selected candidate.
+  Keep the hypothesis as broad as the focal claim. Do not carry a narrow setting, industry, dataset, benchmark, or application into the hypothesis unless the focal claim itself is limited to that setting. Put narrow settings in the study design, not the claim.
 
-# WRITE
-
-Return exactly this JSON shape:
-
-{{
-"problem": "...",
-"previous_work": "...",
-"reasoning": "...",
-"hypothesis": "..."
-}}
-
-- problem:
-  1 to 2 sentences. Name the familiar research setting, the unresolved difficulty within it, and why it matters.
-
-- previous_work:
-  4 to 6 sentences. Group prior findings into a few named lines of work using field-specific terms.
-  For each line, state what it studies, what it establishes, and what it leaves open.
-  End with: "While <settled point> is established, it remains unsettled whether <contested point>."
-
-- reasoning:
-  One short paragraph.
-  Build one causal chain as "X changes Y, which means Z, so W."
-  Name the rival account from CONTESTED and answer it:
-  "It is not that <rival account>, because <reason>; rather, <selected mechanism>."
-  When the selected candidate is comparative, state the condition under which one mechanism is predicted to matter more.
-  End by naming the gap that motivates the hypothesis.
-
-- hypothesis:
-  Exactly one sentence naming the manipulated factor, measurable outcome, comparator, boundary condition or moderator when present, critical control when present, and rival account when present.
-
-# STYLE
-
-Prefer direct research prose.
-
-Good:
-"Combining provenance interfaces with metadata logs should improve authorship attribution in high-stakes writing contexts."
-
-Avoid:
-"The integration of qualitative provenance interfaces with immutable technical metadata affects the reliability of authorship redefinition in a positive direction."
-
-Good:
-"This should matter most when authors have incentives to misrepresent how much AI contributed."
-
-Avoid:
-"The effect is strongest in high-stakes attribution scenarios, holding the degree of AI assistance constant."
-
-# CONSTRAINTS
-
-- Write only about the research problem, approaches, methods, findings, and mechanisms.
-- Do not mention agents, debate turns, adjudication, selected candidates, or who argued what.
-- Use only constructs, method names, thresholds, numbers, and named effects that appear in the provided material.
-- Import nothing from outside the provided material.
-- Present a construct that appears only as a contested assertion as proposed or contested.
-- State an ungrounded figure qualitatively.
-- Keep each named construct's term, but state its operational realization alongside it.
-- Do not let an abstract label stand alone.
-- The dependent variable must be an outcome the cited evidence measures. If the evidence measures a different outcome, restate the dependent variable as the measured outcome or mark the claim predictive.
-- State a comparison as "relative to <comparator>" and a control as "when <control> is held constant"; do not fuse them.
-- Cover the full RESEARCH PROBLEM in its own domain.
-- Keep the comparison in the hypothesis.
-- Assert a primacy claim as established only when the primacy sits in SETTLED, the candidate states it as a finding, and a cited passage grounds the relation itself, not each mechanism separately. Otherwise predict the direction. When in doubt, predict.
-- Return only valid JSON."""
+  Do not invent a boundary, intervention, remedy, comparator, or measure. Do not add clauses that merely restate the warrant."""

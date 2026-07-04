@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo } from "react"
 import {
   Background,
   BackgroundVariant,
@@ -16,14 +16,13 @@ import "@/styles/canvas.css"
 
 import { edgeTypes as EDGE_TYPES } from "@/components/reactflow/edges"
 import { nodeTypes as NODE_TYPES } from "@/components/reactflow/nodes"
-import { useCreateDebate } from "@/hooks/use-create-debate"
-import { useDebateEvents } from "@/hooks/use-debate-events"
-import { useProposeTurn } from "@/hooks/use-propose-turn"
-import { useRunCycle } from "@/hooks/use-run-cycle"
+import { useDebate } from "@/hooks/use-debate"
+import { useExtraction } from "@/hooks/use-extraction"
+import { useHypotheses } from "@/hooks/use-hypotheses"
+import { usePersonas } from "@/hooks/use-personas"
+import { useQueryEvents } from "@/hooks/use-query-events"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 
-import { useChainStore } from "./chain-store"
-import { useDebateStore } from "./debate-store"
 import { deriveEdges, deriveNodes, layoutNodes } from "./derive"
 import {
   canvasShiftViewportRef,
@@ -33,19 +32,13 @@ import {
 import { useSelectionStore } from "./selection-store"
 import { useBuilderSnapshot } from "./use-builder-snapshot"
 
-type AdjustableNodeType =
-  | "research"
-  | "claim"
-  | "agent"
-  | "steer"
-  | "debate"
+type AdjustableNodeType = "research" | "claim" | "agent" | "debate"
 
 function typeForCanvasNodeId(id: string): AdjustableNodeType | null {
   if (id === "research") return "research"
   if (id === "claim") return "claim"
-  if (/^agent-[1-3]$/.test(id)) return "agent"
-  if (/^s\d+$/.test(id)) return "steer"
-  if (/^d\d+$/.test(id)) return "debate"
+  if (/^agent-\d+$/.test(id)) return "agent"
+  if (id === "debate") return "debate"
   return null
 }
 
@@ -60,7 +53,6 @@ function adjustPanelsFor(type: AdjustableNodeType) {
       leftPanelRef.current?.expand()
       rightPanelRef.current?.expand()
       return
-    case "steer":
     case "debate":
       leftPanelRef.current?.collapse()
       rightPanelRef.current?.expand()
@@ -69,29 +61,17 @@ function adjustPanelsFor(type: AdjustableNodeType) {
 }
 
 export function HypoCanvas() {
+  const queryId = useAgentBuilderStore((s) => s.queryId)
   const builder = useBuilderSnapshot()
-  const cycles = useChainStore((s) => s.cycles)
-  const nextPlaceholder = useChainStore((s) => s.nextPlaceholder)
-  const blockedReason = useChainStore((s) => s.blockedReason)
   const nodeSelected = useSelectionStore((s) => s.nodeSelected)
-  const debateId = useDebateStore((s) => s.debateId)
-  const createDebate = useCreateDebate()
-  const runCycle = useRunCycle()
-  const proposeTurn = useProposeTurn()
-  const activatingRef = useRef(false)
   const nodeTypes = useMemo(() => NODE_TYPES, [])
   const edgeTypes = useMemo(() => EDGE_TYPES, [])
-  useDebateEvents(debateId)
 
-  useEffect(() => {
-    if (cycles.length > 0) return
-    const setPlaceholder = useChainStore.getState().placeholderSet
-    if (builder.team.length === 3 && builder.focalClaim != null) {
-      setPlaceholder({ kind: "steer", n: 0 })
-    } else {
-      setPlaceholder(null)
-    }
-  }, [builder.team.length, builder.focalClaim, cycles.length])
+  useQueryEvents(queryId)
+  useExtraction()
+  usePersonas()
+  useDebate()
+  useHypotheses()
 
   const selectedNodeId = useSelectionStore((s) => s.selectedNodeId)
   useEffect(() => {
@@ -100,88 +80,16 @@ export function HypoCanvas() {
     if (type) adjustPanelsFor(type)
   }, [selectedNodeId])
 
-  const onActivatePlaceholder = async () => {
-    if (activatingRef.current) return
-    activatingRef.current = true
-    try {
-      const chain = useChainStore.getState()
-      const debate = useDebateStore.getState()
-      const nxt = chain.nextPlaceholder
-      if (!nxt) return
-
-      if (nxt.kind === "steer" && nxt.n === 0) {
-        const { rootId } = await createDebate.mutateAsync()
-        chain.steerAdvanced(0)
-        useDebateStore.getState().cycleMapped("s0", rootId)
-        chain.placeholderSet({ kind: "debate", n: 1 })
-        useSelectionStore.getState().nodeSelected("s0")
-
-        const team = useAgentBuilderStore.getState().team
-        const debateId = useDebateStore.getState().debateId
-        if (debateId) {
-          await Promise.allSettled(
-            team.slice(0, 3).map((p) =>
-              proposeTurn.mutateAsync({
-                debateId,
-                backendCycleId: rootId,
-                canvasCycleId: "s0",
-                agentId: String(p.cluster_id),
-                steers: [],
-              }),
-            ),
-          )
-        }
-      } else if (nxt.kind === "debate") {
-        const canvasSteerId = `s${nxt.n - 1}`
-        const backendCycleId = debate.canvasToBackend[canvasSteerId]
-        const debateId = debate.debateId
-        if (!debateId || !backendCycleId) {
-          console.error("[activate] missing debate or cycle id")
-          return
-        }
-        chain.placeholderSet(null)
-        chain.debateAdvanced(nxt.n)
-        useDebateStore.getState().cycleMapped(`d${nxt.n}`, backendCycleId)
-        chain.cycleStatusChanged(`d${nxt.n}`, "running")
-        useSelectionStore.getState().nodeSelected(`d${nxt.n}`)
-        adjustPanelsFor("debate")
-        try {
-          await runCycle.mutateAsync({ debateId, cycleId: backendCycleId })
-          chain.cycleStatusChanged(`d${nxt.n}`, "done")
-        } catch (err) {
-          chain.cycleStatusChanged(`d${nxt.n}`, "faded")
-          console.error("[activate] run-cycle failed", err)
-        }
-      } else if (nxt.kind === "steer") {
-        chain.steerAdvanced(nxt.n)
-        chain.placeholderSet(null)
-        useSelectionStore.getState().nodeSelected(`s${nxt.n}`)
-        adjustPanelsFor("steer")
-      }
-    } finally {
-      activatingRef.current = false
-    }
-  }
-
   const { nodes, edges } = useMemo(() => {
-    const baseNodes = deriveNodes(
-      { cycles, nextPlaceholder, blockedReason },
-      builder,
-    )
-    const baseEdges = deriveEdges({ cycles, nextPlaceholder }, builder)
+    const baseNodes = deriveNodes(builder)
+    const baseEdges = deriveEdges(builder)
     const laid = layoutNodes(baseNodes, baseEdges)
-    const withHandlers = laid.map((n) =>
-      n.type === "placeholder"
-        ? { ...n, data: { ...n.data, onActivate: onActivatePlaceholder } }
-        : n,
-    ) as RFNode[]
-    return { nodes: withHandlers, edges: baseEdges as RFEdge[] }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [builder, cycles, nextPlaceholder, blockedReason])
+    return { nodes: laid as RFNode[], edges: baseEdges as RFEdge[] }
+  }, [builder])
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
-    if (node.type === "placeholder") return
-    const t = node.type as AdjustableNodeType
+    const t = typeForCanvasNodeId(node.id)
+    if (!t) return
     if (t === "agent") {
       const persona = (node.data as { persona?: { cluster_id: number } })
         .persona
@@ -197,7 +105,7 @@ export function HypoCanvas() {
     const prev = useSelectionStore.getState().selectedNodeId
     const prevType = prev ? typeForCanvasNodeId(prev) : null
     nodeSelected(null)
-    if (prevType === "agent" || prevType === "steer" || prevType === "debate") {
+    if (prevType === "agent" || prevType === "debate") {
       rightPanelRef.current?.collapse()
     }
   }

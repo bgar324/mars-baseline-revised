@@ -2,7 +2,6 @@ from loguru import logger
 
 from mars.client.s2 import SemanticScholarClient
 from mars.llm.prompts.scout import (
-    REPHRASE_SYSTEM,
     SYSTEM_PROMPT,
     build_query_prompt,
     build_rephrase_prompt,
@@ -253,7 +252,7 @@ class ScoutAgent:
     ) -> tuple[SearchQuery, TokenUsage]:
         result = await self._provider.generate_structured(
             messages=[
-                {"role": "system", "content": REPHRASE_SYSTEM},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": build_rephrase_prompt(agent_claim, central_conflict),

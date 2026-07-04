@@ -14,7 +14,7 @@ from mars.schemas.query import (
     RetrievalAnchors,
     SemanticRole,
 )
-from mars.workflow.base import BaseNode, BaseStep, WorkflowContext
+from mars.workflow.base import BaseNode, BaseStep, WorkflowContext, WorkflowError
 
 logger = logging.getLogger(__name__)
 _diag = loguru_logger.bind(source="workflow.retrieve", stage="retrieve")
@@ -255,6 +255,10 @@ class ExpandCorpusStep(BaseStep):
 
     async def run(self, ctx: WorkflowContext) -> WorkflowContext:
         ctx.papers = await expand_corpus(self._s2, ctx.papers, self._config)
+        if not ctx.papers:
+            raise WorkflowError(
+                "No papers found for this query. Try rephrasing or broadening it."
+            )
         return ctx
 
     def summarize(self, ctx: WorkflowContext) -> dict[str, Any]:

@@ -2,12 +2,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from mars.llm.prompts.query import (
-    SYSTEM_INSTRUCTION as EXPANSION_SYSTEM,
+    SYSTEM_PROMPT as EXPANSION_SYSTEM,
     build_claim_prompt,
     build_expansion_prompt,
 )
 from mars.llm.prompts.question import (
-    SYSTEM_INSTRUCTION as QUESTION_SYSTEM,
+    SYSTEM_PROMPT as QUESTION_SYSTEM,
     build_question_prompt,
 )
 from mars.llm.providers.base import LLMProvider

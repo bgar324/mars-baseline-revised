@@ -8,6 +8,7 @@ export const AuthorSchema = z.object({
 export const PaperSchema = z
   .object({
     id: z.string(),
+    corpus_id: z.number().int().nullable().optional(),
     title: z.string(),
     abstract: z.string().nullable().optional(),
     tldr: z.string().nullable().optional(),

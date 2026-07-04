@@ -17,14 +17,47 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { useSessionReset } from "@/features/agent-builder/use-session-reset"
 import { useCreateQuery } from "@/hooks/use-create-query"
-import { useAgentBuilderStore } from "@/store/agent-builder"
+import { cn } from "@/lib/utils"
+import { useAgentBuilderStore, type RunMode } from "@/store/agent-builder"
 
 const SECTION_LABEL =
   "font-mono text-xs uppercase tracking-wide text-muted-foreground"
 
+const MODE_HINT: Record<RunMode, string> = {
+  auto: "Runs the full pipeline automatically.",
+  manual: "Choose which researchers debate.",
+}
+
+function ModeToggle({ disabled }: { disabled: boolean }) {
+  const mode = useAgentBuilderStore((s) => s.mode)
+  const modeSet = useAgentBuilderStore((s) => s.modeSet)
+  return (
+    <div className="flex items-center gap-0.5 rounded-md border p-0.5">
+      {(["auto", "manual"] as const).map((m) => (
+        <button
+          key={m}
+          type="button"
+          disabled={disabled}
+          onClick={() => modeSet(m)}
+          className={cn(
+            "rounded px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide transition-colors",
+            mode === m
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground",
+            disabled && "cursor-not-allowed opacity-60",
+          )}
+        >
+          {m}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function QueryInput() {
   const draft = useAgentBuilderStore((s) => s.draft)
   const committed = useAgentBuilderStore((s) => s.committed)
+  const mode = useAgentBuilderStore((s) => s.mode)
   const draftChanged = useAgentBuilderStore(
     (s) => s.researchProblemDraftChanged,
   )
@@ -90,13 +123,20 @@ export function QueryInput() {
         )}
       </div>
 
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className="truncate text-[11px] text-muted-foreground">
+          {MODE_HINT[mode]}
+        </span>
+        <ModeToggle disabled={isDisabled} />
+      </div>
+
       <div className="relative">
         <Textarea
           value={draft}
           onChange={(e) => draftChanged(e.target.value)}
           onKeyDown={onKeyDown}
           disabled={isDisabled}
-          placeholder="What scientific question should the team investigate?"
+          placeholder="Enter a research query."
           className="h-36 resize-none overflow-y-auto bg-background pr-12 text-s md:text-s"
         />
         <Button

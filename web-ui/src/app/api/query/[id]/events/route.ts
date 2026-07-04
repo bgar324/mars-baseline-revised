@@ -5,7 +5,7 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { id } = await ctx.params
-  const res = await upstream(`/api/v1/debates/${id}/events`, { method: "GET" })
+  const res = await upstream(`/api/v1/queries/${id}/events`, { method: "GET" })
   return new Response(res.body, {
     status: res.status,
     headers: {

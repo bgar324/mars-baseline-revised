@@ -11,6 +11,8 @@ T = TypeVar("T", bound=BaseModel)
 
 class ProviderType(str, Enum):
     GEMINI = "gemini"
+    OPENAI = "openai"
+    OPENROUTER = "openrouter"
 
 
 class ProviderError(Exception): ...

@@ -1,8 +1,14 @@
 "use client"
 
+import { useMemo, useState } from "react"
+import { Check } from "lucide-react"
+
 import { AgentAvatar } from "@/components/common/agent-avatar"
+import { Button } from "@/components/ui/button"
 import { rightPanelRef } from "@/features/hypo-canvas/panel-refs"
 import { usePersonas } from "@/hooks/use-personas"
+import { usePerspectives } from "@/hooks/use-perspectives"
+import { useRunDebate } from "@/hooks/use-run-debate"
 import { cn } from "@/lib/utils"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import type { PersonaAgent } from "@/types/persona"
@@ -13,7 +19,17 @@ const SECTION_LABEL =
 const FIELD_LABEL =
   "font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
 
-function AgentCard({ persona }: { persona: PersonaAgent }) {
+function AgentCard({
+  persona,
+  selectable,
+  checked,
+  onToggle,
+}: {
+  persona: PersonaAgent
+  selectable: boolean
+  checked: boolean
+  onToggle: (clusterId: number) => void
+}) {
   const selected = useAgentBuilderStore((s) => s.selectedClusterId)
   const select = useAgentBuilderStore((s) => s.agentSelected)
 
@@ -42,6 +58,24 @@ function AgentCard({ persona }: { persona: PersonaAgent }) {
       )}
     >
       <div className="flex min-w-0 items-center gap-2">
+        {selectable && (
+          <button
+            type="button"
+            aria-pressed={checked}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggle(persona.cluster_id)
+            }}
+            className={cn(
+              "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
+              checked
+                ? "border-foreground bg-foreground text-background"
+                : "border-muted-foreground/40 text-transparent hover:border-foreground",
+            )}
+          >
+            <Check className="size-3" />
+          </button>
+        )}
         <AgentAvatar
           clusterId={persona.cluster_id}
           name={persona.name}
@@ -69,14 +103,69 @@ function AgentCard({ persona }: { persona: PersonaAgent }) {
 }
 
 export function ResearcherPool() {
+  const queryId = useAgentBuilderStore((s) => s.queryId)
+  return <ResearcherPoolInner key={queryId ?? "none"} />
+}
+
+function ResearcherPoolInner() {
   const committed = useAgentBuilderStore((s) => s.committed)
+  const mode = useAgentBuilderStore((s) => s.mode)
+  const debateStage = useAgentBuilderStore((s) => s.pipelineStages.debate)
   const { data, isFetching, isError } = usePersonas()
+  const { data: perspectives } = usePerspectives()
+  const runDebate = useRunDebate()
+
+  const debateStarted = debateStage != null && debateStage !== "pending"
+  const selectable =
+    mode === "manual" && !!data && data.length > 0 && !debateStarted
+
+  const [userChecked, setUserChecked] = useState<Set<number> | null>(null)
+
+  const defaultChecked = useMemo(() => {
+    if (perspectives && perspectives.length > 0) return new Set(perspectives)
+    if (data) return new Set(data.map((p) => p.cluster_id))
+    return new Set<number>()
+  }, [perspectives, data])
+
+  const effective = userChecked ?? defaultChecked
+
+  const toggle = (clusterId: number) =>
+    setUserChecked((prev) => {
+      const next = new Set(prev ?? defaultChecked)
+      if (next.has(clusterId)) next.delete(clusterId)
+      else next.add(clusterId)
+      return next
+    })
+
+  const checkedIds = [...effective]
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <span className={SECTION_LABEL}>
         Researchers{data ? ` (${data.length})` : ""}
       </span>
+
+      {selectable && (
+        <div className="flex flex-col gap-1.5">
+          <Button
+            size="sm"
+            onClick={() => runDebate.mutate(checkedIds)}
+            disabled={checkedIds.length < 2 || runDebate.isPending}
+          >
+            Run debate ({checkedIds.length})
+          </Button>
+          {checkedIds.length < 2 && (
+            <p className="text-xs text-muted-foreground">
+              Select at least 2 researchers to debate.
+            </p>
+          )}
+          {runDebate.isError && (
+            <p className="text-xs text-destructive">
+              Couldn&rsquo;t start the debate. Please try again.
+            </p>
+          )}
+        </div>
+      )}
 
       {!committed ? (
         <p className="text-s text-muted-foreground">No researchers yet.</p>
@@ -99,7 +188,13 @@ export function ResearcherPool() {
       ) : (
         <div className="flex flex-col gap-2">
           {data.map((persona) => (
-            <AgentCard key={persona.cluster_id} persona={persona} />
+            <AgentCard
+              key={persona.cluster_id}
+              persona={persona}
+              selectable={selectable}
+              checked={effective.has(persona.cluster_id)}
+              onToggle={toggle}
+            />
           ))}
         </div>
       )}

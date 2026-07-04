@@ -33,6 +33,41 @@ class DebateSettings(GeminiSettings):
     max_output_tokens: int = Field(default=32768, ge=100, le=32768)
 
 
+class OpenAISettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="OPENAI_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    api_key: SecretStr | None = None
+    base_url: str | None = None
+    model: str = "gpt-4o"
+    temperature: float = Field(default=1.0, ge=0.0, le=2.0)
+    max_output_tokens: int | None = None
+    retry_attempts: int = Field(default=8, ge=1)
+    retry_initial_delay: float = Field(default=1.0, ge=0.0)
+    retry_max_delay: float = Field(default=60.0, ge=0.0)
+
+
+class OpenRouterSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="OPENROUTER_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    api_key: SecretStr | None = None
+    base_url: str = "https://openrouter.ai/api/v1"
+    model: str = "qwen/qwen-2.5-72b-instruct"
+    temperature: float = Field(default=1.0, ge=0.0, le=2.0)
+    max_output_tokens: int | None = None
+    retry_attempts: int = Field(default=8, ge=1)
+    provider_sort: str | None = "throughput"
+
+
 class LangExtractSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="LANGEXTRACT_",
@@ -96,6 +131,8 @@ class AppSettings(BaseSettings):
     )
 
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
+    openai: OpenAISettings = Field(default_factory=OpenAISettings)
+    openrouter: OpenRouterSettings = Field(default_factory=OpenRouterSettings)
     langextract: LangExtractSettings = Field(default_factory=LangExtractSettings)
     supabase: SupabaseSettings = Field(default_factory=SupabaseSettings)
     s2: SemanticScholarSettings = Field(default_factory=SemanticScholarSettings)

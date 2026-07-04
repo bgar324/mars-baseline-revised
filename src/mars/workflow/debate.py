@@ -35,7 +35,7 @@ from mars.models.debate import (
 )
 from mars.models.persona import Persona
 from mars.schemas.event import StageName
-from mars.workflow.base import BaseNode, BaseStep, WorkflowContext
+from mars.workflow.base import BaseNode, BaseStep, WorkflowContext, WorkflowError
 
 dlog = logger.bind(source="workflow.debate", stage="debate")
 
@@ -398,15 +398,20 @@ class DebateRuntime:
             cycle.assessment.central_conflict if cycle.assessment else cycle.focal_claim
         )
         if self._debate_retrieval:
-            for agent_id in cycle.agent_ids:
-                if agent_id in cycle.judge_evidence:
-                    continue
+            pending = [a for a in cycle.agent_ids if a not in cycle.judge_evidence]
+
+            async def fetch_judge(agent_id: str):
                 bundle, _ = await self._scout.for_judge(
                     agent_id=agent_id,
                     agent_claim=last_claim(cycle, agent_id),
                     central_conflict=conflict,
                     agent_cited_ids=cited_ids(cycle, agent_id),
                 )
+                return agent_id, bundle
+
+            for agent_id, bundle in await asyncio.gather(
+                *(fetch_judge(a) for a in pending)
+            ):
                 cycle.judge_evidence[agent_id] = bundle
         if self._counter_evidence and self._debate_retrieval:
             await self._counter(cycle)
@@ -474,25 +479,33 @@ class DebateRuntime:
         conflict = (
             cycle.assessment.central_conflict if cycle.assessment else cycle.focal_claim
         )
-        for h in cycle.synthesis.hypotheses:
-            if not h.is_relational:
-                h.relation_grounding = []
-                continue
-            if not self._debate_retrieval:
-                h.relation_grounding = []
-                continue
+        targets = [
+            h
+            for h in cycle.synthesis.hypotheses
+            if h.claim_type == "comparative" and self._debate_retrieval
+        ]
+
+        async def fetch_relation(h):
             bundle, _ = await self._scout.for_relation(
-                relation_claim=h.statement,
+                relation_claim=h.proposition,
                 central_conflict=conflict,
                 mechanism_ids=h.grounding,
             )
-            h.relation_grounding = list(
-                dict.fromkeys(s.corpus_id for s in bundle.snippets)
+            return h, bundle
+
+        for h, bundle in await asyncio.gather(
+            *(fetch_relation(h) for h in targets)
+        ):
+            before = len(h.grounding)
+            h.grounding = list(
+                dict.fromkeys(
+                    [*h.grounding, *(s.corpus_id for s in bundle.snippets)]
+                )
             )
             dlog.info(
-                "relation | {} relation_grounding={}/{} mechanism ids",
+                "relation | {} grounding {} -> {} ids",
                 h.id,
-                len(h.relation_grounding),
+                before,
                 len(h.grounding),
             )
 
@@ -508,6 +521,7 @@ class DebateRuntime:
         choice = None
         for attempt in range(2):
             _, choice, _ = await self._judge.select_best(
+                research_query=cycle.problem,
                 central_conflict=central_conflict,
                 unresolved=unresolved,
                 candidates=cycle.synthesis.hypotheses,
@@ -715,6 +729,8 @@ class DebateNode(BaseNode):
         super().__init__(stage=StageName.DEBATE, name="debate", steps=steps)
 
     async def before_run(self, ctx: WorkflowContext) -> WorkflowContext:
+        if len(ctx.personas) < 2:
+            raise WorkflowError("Need at least 2 researchers to debate.")
         agents = ctx.personas
         cycle = Cycle(
             focal_claim=ctx.extracted.claim,

@@ -2,15 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query"
 
-import { useChainStore } from "@/features/hypo-canvas/chain-store"
-import { useDebateStore } from "@/features/hypo-canvas/debate-store"
 import { fetcher, isStaleQueryError } from "@/lib/api/client"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import { PersonaAgentListSchema, type PersonaAgent } from "@/types/persona"
 
 async function fetchPersonas(queryId: string): Promise<PersonaAgent[]> {
   return fetcher(
-    `/api/query/${queryId}/personas`,
+    `/api/query/${queryId}/persona-pool`,
     PersonaAgentListSchema,
   )
 }
@@ -33,8 +31,6 @@ export function usePersonas() {
         return data
       } catch (error) {
         if (isStaleQueryError(error)) {
-          useChainStore.getState().reset()
-          useDebateStore.getState().reset()
           useAgentBuilderStore.getState().researchProblemCleared()
         }
         throw error

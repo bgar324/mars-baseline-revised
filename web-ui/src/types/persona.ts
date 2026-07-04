@@ -20,22 +20,34 @@ export const EvaluationLensSchema = z.enum([
   "predictive_power",
 ])
 
-export const PersonaAgentSchema = z.object({
-  cluster_id: z.number().int(),
-  name: z.string(),
-  framing: z.string(),
-  background: z.string(),
-  reasoning_style: ReasoningStyleSchema,
-  evaluation_lens: EvaluationLensSchema,
-  references: z.array(z.string()),
-  instructions: z.array(z.string()).min(1),
-  constraints: z.string().nullable(),
-})
+export const EvidenceRelationSchema = z.enum([
+  "direct",
+  "analogical",
+  "mixed",
+  "ungrounded",
+])
+
+export const PersonaAgentSchema = z
+  .object({
+    cluster_id: z.number().int(),
+    name: z.string(),
+    framing: z.string(),
+    background: z.string(),
+    methods_summary: z.string(),
+    evidence_relation: EvidenceRelationSchema,
+    reasoning_style: ReasoningStyleSchema,
+    evaluation_lens: EvaluationLensSchema,
+    references: z.array(z.string()),
+    instructions: z.array(z.string()).min(1),
+    constraints: z.string().nullable().optional(),
+  })
+  .passthrough()
 
 export const PersonaAgentListSchema = z.array(PersonaAgentSchema)
 
 export type ReasoningStyle = z.infer<typeof ReasoningStyleSchema>
 export type EvaluationLens = z.infer<typeof EvaluationLensSchema>
+export type EvidenceRelation = z.infer<typeof EvidenceRelationSchema>
 export type PersonaAgent = z.infer<typeof PersonaAgentSchema>
 
 export const REASONING_STYLE_DESCRIPTIONS: Record<ReasoningStyle, string> = {

@@ -1,14 +1,11 @@
 from mars.llm.agents.persona import agent_lines, turn_log
 from mars.llm.prompts.judge import (
     ADJUDICATION_PROMPT,
-    ADJUDICATION_SYSTEM,
     ASSESSMENT_PROMPT,
     HYPOTHESIS_PROMPT,
-    JUDGE_SYSTEM,
     SELECT_PROMPT,
-    SELECT_SYSTEM,
     SYNTHESIS_PROMPT,
-    SYNTHESIS_SYSTEM,
+    SYSTEM_PROMPT,
 )
 from mars.llm.prompts.persona import bullet_lines
 from mars.llm.providers.base import LLMProvider, TokenUsage
@@ -58,50 +55,55 @@ def counterclaim_lines(counterclaims: dict[str, Counterclaim] | None) -> str:
     return "\n".join(lines) or "None."
 
 
-def cross_exam_block(evidence: dict[str, EvidenceSet], names: dict[str, str]) -> str:
+def cross_exam_block(
+    evidence: dict[str, EvidenceSet],
+    names: dict[str, str],
+    relations: dict[str, str] | None = None,
+) -> str:
     if not evidence:
         return "No cross-examination evidence retrieved."
+    relations = relations or {}
     blocks = []
     for agent_id, bundle in evidence.items():
         who = names.get(agent_id, agent_id)
+        relation = relations.get(agent_id)
+        header = f"## {who} [evidence: {relation}]" if relation else f"## {who}"
         if not bundle.snippets:
-            blocks.append(f"## {who}\nNo passages found in this agent's cited papers.")
+            blocks.append(f"{header}\nNo passages found in this agent's cited papers.")
             continue
         passages = "\n".join(
             f"- [corpus_id {snippet.corpus_id}] {snippet.text}"
             for snippet in bundle.snippets
         )
-        blocks.append(f"## {who}\n{passages}")
+        blocks.append(f"{header}\n{passages}")
     return "\n\n".join(blocks)
 
 
 def candidate_lines(candidates: list[Hypothesis]) -> str:
     lines = []
     for hypothesis in candidates:
-        grounding = (
-            ", ".join(hypothesis.relation_grounding)
-            if hypothesis.relation_grounding
-            else "none"
-        )
+        design = hypothesis.study_design
         lines.append(
-            f"[{hypothesis.id}] {hypothesis.statement} (relation_grounding: {grounding})"
+            f"[{hypothesis.id}] {hypothesis.proposition} "
+            f"(type: {hypothesis.claim_type}; comparator: {design.comparator}; "
+            f"measure: {design.measure})"
         )
     return "\n".join(lines) or "- none"
 
 
-def position_lines(candidates: list[Hypothesis]) -> str:
-    return "\n".join(f"- {candidate.statement.strip()}" for candidate in candidates)
+def hypothesis_lines(candidates: list[Hypothesis]) -> str:
+    return "\n".join(f"- {candidate.proposition.strip()}" for candidate in candidates)
 
 
 def candidate_detail(best: Hypothesis) -> str:
-    variables = best.variables
+    design = best.study_design
     return (
-        f"[{best.id}] {best.statement}\n"
-        f"mechanism: {best.mechanism}\n"
-        f"variables: IV={variables.independent}; DV={variables.dependent}; "
-        f"moderators={variables.moderators or 'none'}; "
-        f"mediators={variables.mediators or 'none'}\n"
-        f"scope: {best.scope}\n"
+        f"[{best.id}] {best.proposition}\n"
+        f"claim_type: {best.claim_type}\n"
+        f"causal_chain: {best.causal_chain}\n"
+        f"study_design: context={design.context}; exposure={design.exposure}; "
+        f"comparator={design.comparator}; outcome={design.outcome}; measure={design.measure}\n"
+        f"warrant: {best.warrant}\n"
         f"falsifier: {best.falsifier}"
     )
 
@@ -142,7 +144,7 @@ class Judge:
         )
         result = await self._provider.generate_structured(
             messages=[
-                {"role": "system", "content": JUDGE_SYSTEM},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user},
             ],
             schema=DebateAssessment,
@@ -166,17 +168,18 @@ class Judge:
         cycle: int = 1,
     ) -> tuple[Adjudication, TokenUsage]:
         names = agent_names(agents)
+        relations = {str(a.cluster_id): a.evidence_relation for a in agents}
         user = ADJUDICATION_PROMPT.format(
             research_query=research_query,
             focal_claim=focal_claim,
             central_conflict=central_conflict,
             turns=turn_log(turns, names),
-            cross_examination=cross_exam_block(evidence or {}, names),
+            cross_examination=cross_exam_block(evidence or {}, names, relations),
             counterclaims=counterclaim_lines(counterclaims),
         )
         result = await self._provider.generate_structured(
             messages=[
-                {"role": "system", "content": ADJUDICATION_SYSTEM},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user},
             ],
             schema=Adjudication,
@@ -208,7 +211,7 @@ class Judge:
         )
         result = await self._provider.generate_structured(
             messages=[
-                {"role": "system", "content": JUDGE_SYSTEM},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user},
             ],
             schema=Synthesis,
@@ -224,19 +227,21 @@ class Judge:
     async def select_best(
         self,
         *,
+        research_query: str,
         central_conflict: str,
         unresolved: list[str],
         candidates: list[Hypothesis],
         cycle: int = 1,
     ) -> tuple[Hypothesis, BestCandidate, TokenUsage]:
         user = SELECT_PROMPT.format(
+            research_query=research_query,
             central_conflict=central_conflict,
             unresolved=bullet_lines(unresolved, empty="- none"),
             candidates=candidate_lines(candidates),
         )
         result = await self._provider.generate_structured(
             messages=[
-                {"role": "system", "content": SELECT_SYSTEM},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user},
             ],
             schema=BestCandidate,
@@ -265,19 +270,19 @@ class Judge:
             central_conflict=(
                 assessment.central_conflict if assessment else focal_claim
             ),
-            positions=position_lines(candidates),
+            candidates=hypothesis_lines(candidates),
             evidence=evidence_digest(cycle_obj),
-            settled=bullet_lines(
+            resolved=bullet_lines(
                 adjudication.resolved if adjudication else [], empty="- none"
             ),
-            contested=bullet_lines(
+            unresolved=bullet_lines(
                 adjudication.unresolved if adjudication else [], empty="- none"
             ),
             best=candidate_detail(best),
         )
         result = await self._provider.generate_structured(
             messages=[
-                {"role": "system", "content": SYNTHESIS_SYSTEM},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user},
             ],
             schema=MetaReview,

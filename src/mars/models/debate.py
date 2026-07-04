@@ -10,7 +10,7 @@ from mars.models.persona import Persona
 
 AgentId = str
 
-AgentPhase = Literal["proposal", "rebuttal", "refutation"]
+AgentPhase = Literal["proposal", "rebuttal", "refinement"]
 JudgePhase = Literal["adjudication", "synthesis"]
 DebateEvent = AgentPhase | JudgePhase
 
@@ -58,12 +58,12 @@ class EvidenceSnippet(BaseModel):
     title: str = Field(default="", description="Source paper title.")
     section: str | None = Field(
         default=None,
-        description="Section name the excerpt came from, e.g. 'Conclusion'.",
+        description="Section name the passage came from, e.g. 'Conclusion'.",
     )
-    text: str = Field(description="The excerpt text, about 500 words.")
+    text: str = Field(description="The passage text, about 500 words.")
     score: float | None = Field(
         default=None,
-        description="Snippet relevance score returned by the retrieval endpoint.",
+        description="Passage relevance score returned by the retrieval endpoint.",
     )
     tier: Literal[
         "primary",
@@ -72,7 +72,7 @@ class EvidenceSnippet(BaseModel):
         "relation",
         "counter_internal",
         "counter_external",
-    ] = Field(description="Retrieval stage that produced this snippet.")
+    ] = Field(description="Retrieval stage that produced this passage.")
 
 
 class EvidenceSet(BaseModel):
@@ -101,42 +101,38 @@ class SearchQuery(BaseModel):
 class AgentResponse(BaseModel):
     evidence_weight: EvidenceWeight | None = Field(
         default=None,
-        description="Set on rebuttal and refutation turns only. How the opponent's cited evidence "
-        "bears on your position: strengthens, weakens, refines, disputed, or unrelated. Null on a "
-        "proposal turn.",
+        description="How the opponent's cited evidence bears on your position; null on a proposal turn.",
     )
-    claim: str = Field(description="Your position, as one contestable sentence.")
+    claim: str = Field(
+        description="Your position, as one contestable sentence, calibrated to the evidence."
+    )
     rationale: str = Field(
         description="One to three sentences justifying the claim from your evidence."
     )
     evidence: list[str] = Field(
         default_factory=list,
-        description="corpus_ids supporting this turn, copied verbatim from the Corpus ID lines in "
-        "your evidence. Leave empty if no evidence was retrieved; never invent an id.",
+        description="corpus_ids supporting this turn, copied verbatim.",
     )
     conceded_point: str | None = Field(
         default=None,
-        description="Set only when evidence_weight is weakens: the specific part of your position "
-        "the evidence undermines. Null otherwise.",
+        description="The part of your position the evidence undermines; only when evidence_weight is weakens.",
     )
     preserved_point: str | None = Field(
         default=None,
-        description="Optional, only when evidence_weight is weakens: the part of your position that "
-        "still holds. Null otherwise.",
+        description="The part of your position that still holds; only when evidence_weight is weakens.",
     )
     revised_position: str | None = Field(
         default=None,
-        description="Set only when evidence_weight is weakens: your position restated after the "
-        "concession, in one sentence. Null otherwise.",
+        description="Your position restated after the concession; only when evidence_weight is weakens.",
     )
     target_id: AgentId | None = Field(
         default=None,
-        description="agent_id of the agent you address. Null on a proposal turn.",
+        description="agent_id of the agent you address; null on a proposal turn.",
     )
     message: str = Field(description="Your spoken turn in plain language.")
     action: TurnAction | None = Field(
         default=None,
-        description="Leave null. Derived in code from evidence_weight; not chosen by the model.",
+        description="Leave null; derived in code from evidence_weight.",
     )
 
 
@@ -152,18 +148,16 @@ class AgentTurn(BaseModel):
 class Stance(BaseModel):
     agent_id: str = Field(description="agent_id of the agent whose position this is.")
     position: str = Field(
-        description="The agent's core position on the focal claim in one sentence: the side it "
-        "stakes and its central reason. Not a summary of its whole perspective.",
+        description="The agent's core position on the focal claim: the side and its central reason.",
     )
 
 
 class Disagreement(BaseModel):
     agents: list[str] = Field(
-        description="agent_ids on opposing sides of this clash. At least 2.",
+        description="agent_ids on opposing sides of this disagreement. At least 2.",
     )
     point: str = Field(
-        description="The precise proposition they disagree on, covering primacy, mechanism, "
-        "sufficiency, definition, or scope. State the conflict directly, not a compromise.",
+        description="The precise proposition they disagree on.",
     )
 
 
@@ -176,8 +170,8 @@ class Critique(BaseModel):
         description="agent_id best placed to press this weakness, or '' if any opponent could.",
     )
     on_point: str = Field(
-        description="The specific weakness to challenge: an unsupported step, an overstated link, "
-        "or an unaddressed alternative. What to attack, not who is winning.",
+        description="The specific weakness to challenge: an unsupported step, overstated link, or "
+        "unaddressed alternative.",
     )
 
 
@@ -188,8 +182,7 @@ class DebateAssessment(BaseModel):
     cycle: int = Field(default=1, description="Round number this assessment covers.")
 
     overview: str = Field(
-        description="One short paragraph stating where the debate stands after the proposals. "
-        "Orient only; do not restate the fields below or favor a side.",
+        description="Short neutral overview of where the debate stands after the proposals."
     )
     stances: list[Stance] = Field(
         default_factory=list,
@@ -197,34 +190,26 @@ class DebateAssessment(BaseModel):
     )
     points_of_agreement: list[str] = Field(
         default_factory=list,
-        description="Propositions two or more agents explicitly share. Each is a proposition, not "
-        "a shared topic framing.",
+        description="Shared propositions stated by two or more agents.",
     )
     points_of_disagreement: list[Disagreement] = Field(
         default_factory=list,
-        description="The live clashes after the proposals, each naming the agents and the precise "
-        "point.",
+        description="Disagreements after the proposals, naming the agents and the point.",
     )
     central_conflict: str = Field(
-        description="The single disagreement the rebuttal round must fight over: the axis most "
-        "central to the focal claim that is still unresolved. The rebuttal round is organized "
-        "around it.",
+        description="The unresolved disagreement most central to the focal claim, stated as two conflicting positions.",
     )
     critiques: list[Critique] = Field(
         default_factory=list,
-        description="The specific weaknesses the rebuttal round should pursue, as engagement "
-        "directives stating who challenges whom on what. Not a judgment of who leads.",
+        description="Who challenges whom, on what.",
     )
     open_questions: list[str] = Field(
         default_factory=list,
-        description="Unresolved threads raised in the proposals that further debate could settle. "
-        "Draw only from the proposals; introduce no new terminology.",
+        description="Open questions raised in the proposals.",
     )
     disagreement_present: bool = Field(
         default=True,
-        description="True if the proposals stake genuinely opposing positions; False if they "
-        "converged on one side. False signals consensus collapse: central_conflict is then strained "
-        "or manufactured and there is no real opposition to resolve.",
+        description="Whether the proposals contest a genuine axis.",
     )
 
 
@@ -235,60 +220,53 @@ class Adjudication(BaseModel):
     cycle: int = Field(default=1, description="Round number this covers.")
 
     reasoning: str = Field(
-        description="4 to 7 sentences on how the debate changed the central conflict, using two "
-        "descriptive view labels derived from the conflict and tied back to the focal claim. "
-        "Subject-matter terms only: no raw paper ids, no agent names, no 'Position A/B'.",
+        description="A 4 to 6 sentence summary of how the debate changed the central conflict, in "
+        "subject-matter terms.",
     )
     resolved: list[str] = Field(
         default_factory=list,
-        description="Settled subject-matter propositions, each stating the condition or scope where "
-        "it holds. No raw paper ids, no agent names.",
+        description="Propositions the debate resolved, each with the condition or scope where it holds.",
     )
     unresolved: list[str] = Field(
         default_factory=list,
-        description="Open research-level questions, each naming the disputed mechanism and the "
-        "comparison, condition, or threshold that would decide it. No raw paper ids, no agent "
-        "names, no 'more research is needed'.",
+        description="Open questions, each naming the disputed mechanism and what would decide it.",
     )
 
 
 class ClaimDecomposition(BaseModel):
-    claim: str = Field(description="The agent's claim being tested, in one sentence.")
-    mechanism: str = Field(
-        description="The causal process by which the claim says one factor produces or prevents an "
-        "outcome."
+    proposition: str = Field(description="The claim in plain language.")
+    causal_chain: str = Field(
+        description="How the claim says one factor produces or prevents the outcome."
     )
     assumption: str = Field(
-        description="The one condition that must hold for the mechanism to support the claim, whose "
-        "failure would break the mechanism."
+        description="The one condition whose failure would break the causal_chain."
     )
     weakness: str = Field(
-        description="The point where the claim fails if the assumption does not hold. State it as "
-        "something a paper could measure or observe."
+        description="The outcome a study could measure that would show the assumption failing."
     )
     counterclaim: str = Field(
-        description="The revised or opposing claim that follows from the weakness, in one sentence."
+        description="The opposing claim that follows from the weakness, in one sentence."
     )
     counter_queries: list[str] = Field(
-        description="2 to 3 search queries that find evidence of the weakness. Each names the "
-        "mechanism and one failure mode, as one descriptive sentence for semantic snippet search.",
+        description="2 to 3 short search queries that look for evidence of the weakness.",
     )
 
 
 class CounterVerdict(BaseModel):
     status: Literal["grounded", "predictive", "rejected"] = Field(
-        description="grounded: a retrieved passage attests the weakness, so it can weaken the claim. "
-        "predictive: no passage, but the weakness follows from the mechanism and assumption, so it "
-        "is an open question. rejected: neither holds, so the weakness is dropped.",
+        description=(
+            "grounded: a passage supports the weakness. "
+            "predictive: no passage supports it, but it follows from the causal_chain and assumption. "
+            "rejected: neither holds."
+        ),
     )
     scope: str = Field(
         default="",
-        description="The condition under which the weakness holds. Set only when status is grounded.",
+        description="The condition under which the weakness holds. Set only when grounded.",
     )
     grounding: list[str] = Field(
         default_factory=list,
-        description="corpus_ids of the passages attesting the weakness. Set only when status is "
-        "grounded.",
+        description="corpus_ids of the passages attesting the weakness. Set only when grounded.",
     )
 
 
@@ -297,76 +275,70 @@ class Counterclaim(BaseModel):
     verdict: CounterVerdict
 
 
-class HypothesisVariables(BaseModel):
-    independent: str = Field(
-        description="The independent variable: the cause being manipulated or contrasted."
+ClaimType = Literal[
+    "descriptive",
+    "comparative",
+    "associative",
+    "causal",
+    "predictive",
+]
+
+
+class StudyDesign(BaseModel):
+    context: str = Field(
+        description="The setting, population, task, or domain where the hypothesis applies."
     )
-    dependent: str = Field(
-        description="The dependent variable: the measured effect, at the level the question asks."
+    exposure: str = Field(
+        description="The main condition, intervention, or observed factor."
     )
-    moderators: list[str] = Field(
-        default_factory=list,
-        description="Conditions that change the strength or direction of the IV-to-DV link.",
+    comparator: str = Field(
+        description="The baseline or rival condition the exposure is compared against."
     )
-    mediators: list[str] = Field(
-        default_factory=list,
-        description="Intervening variables the causal chain runs through.",
+    outcome: str = Field(
+        description="The construct being evaluated; may be abstract when the measure makes it observable."
+    )
+    measure: str = Field(
+        description="The observable metric that tests the outcome (e.g. expert-score agreement, "
+        "self-preference rate, residual bias after perturbation); never an abstract construct "
+        "(validity, trustworthiness, reliability, quality).",
     )
 
 
 class Hypothesis(BaseModel):
     id: str = Field(default="", description="Leave empty. Assigned after generation.")
-    statement: str = Field(
-        description="The hypothesis as one sentence, of the form '[mechanism/construct] affects "
-        "[dependent variable] in [direction], strongest in [scope/moderator], holding [controls] "
-        "constant.' Lead with the mechanism; name a specific method only as an example, never as the "
-        "grammatical subject. The dependent variable must answer the question at the level asked: a "
-        "'what mechanism' question takes a mechanistic DV, not a downstream phenotype or proxy, and "
-        "uses the same quantity the problem names.",
+    claim_type: ClaimType = Field(
+        description="descriptive (composition or pattern), comparative (one condition differs from "
+        "another), associative (X relates to Y, no cause), causal (X changes Y through a "
+        "mechanism), or predictive (X forecasts, classifies, or estimates Y).",
     )
-    relationship: str = Field(
-        description="Direction of the IV-to-DV relationship: positive, negative, or non-linear."
+    proposition: str = Field(
+        description="The hypothesis as one clear, testable sentence in the claim_type's logical "
+        "form: what changes, compared to what, on what measured outcome, with the predicted "
+        "direction. Calibrate strength to the evidence: hedge unless the relation is established.",
     )
-    is_relational: bool = Field(
-        default=False,
-        description="True only if this hypothesis states a relation between two mechanisms "
-        "(ordering, threshold, interaction, moderator, trade-off, or primacy). False for a "
-        "single-mechanism hypothesis.",
+    causal_chain: str = Field(
+        description="The mechanism or explanatory pathway as a compact sequence, A -> B -> C, "
+        "naming the mediator or process. For a non-causal claim_type (associative, comparative, "
+        "predictive), state that logic without claiming causation.",
     )
-    mechanism: str = Field(
-        description="The single causal chain from IV to DV, the 'because' (A changes B changes C). "
-        "Anything that must be true but is not part of this chain belongs in assumptions.",
-    )
-    assumptions: list[str] = Field(
-        default_factory=list,
-        description="Standalone conditions that must hold for the mechanism to operate but that you "
-        "are not testing. At most 4.",
-    )
-    variables: HypothesisVariables
-    controls: list[str] = Field(
-        default_factory=list,
-        description="What is held constant to isolate the IV. Each control must be a different "
-        "entity from the IV. At most 3.",
+    study_design: StudyDesign
+    warrant: str = Field(
+        description="Why the causal_chain and evidence support the proposition; do not restate the "
+        "proposition or causal_chain. When the adjudication names a competing account, why this "
+        "pathway beats or refines that account.",
     )
     falsifier: str = Field(
-        description="The direct negation of the statement's direction on its dependent variable, as "
-        "a concrete observed result, not a competing theory. Introduce no new variable.",
-    )
-    scope: str = Field(
-        description="The population or setting you would sample from. Distinct from moderators."
+        description="A concrete observed result, stated against the measure, that would negate the "
+        "proposition.",
     )
     grounding: list[str] = Field(
         default_factory=list,
-        description="corpus_ids supporting the mechanism, copied verbatim. At least 1.",
-    )
-    relation_grounding: list[str] = Field(
-        default_factory=list,
-        description="For relational hypotheses only: corpus_ids whose passages bear on the "
-        "interaction itself, not on each mechanism separately. Empty means the relation is untested.",
+        description="corpus_ids supporting the mechanism, outcome, or pattern, copied verbatim. "
+        "At least 1.",
     )
     contributing_agents: list[str] = Field(
         default_factory=list,
-        description="agent_ids whose arguments fed this hypothesis. At most 3.",
+        description="agent_ids whose arguments this hypothesis draws on. At most 3.",
     )
 
 
@@ -375,30 +347,27 @@ class BestCandidate(BaseModel):
         description="id of the chosen candidate, copied from Synthesis.hypotheses (e.g. 'H4')."
     )
     reason: str = Field(
-        description="One sentence stating why this candidate is the debate's central unresolved claim.",
+        description="One sentence on why this hypothesis best addresses the central unresolved question.",
     )
 
 
 class MetaReview(BaseModel):
     problem: str = Field(
-        description="The central difficulty posed as a question: state the setting first, then the "
-        "difficulty within it, in concrete domain terms, and why it matters if unresolved.",
+        description="The central difficulty as a question: the setting, the difficulty within it, "
+        "and why it matters.",
     )
     previous_work: str = Field(
-        description="The prior approaches the debate surfaced: what each explains and its specific "
-        "limitation, what is settled versus contested, and what motivates the open question.",
+        description="The prior approaches the debate surfaced: what each explains, its limitation, "
+        "and what is resolved versus unresolved.",
     )
     reasoning: str = Field(
-        description="One causal chain from the primary condition to the outcome, with the key step "
-        "spelled out, the main rival named and answered, and any tentative link marked as tentative.",
+        description="One causal chain from the primary condition to the outcome, with the "
+        "competing account named and answered.",
     )
     hypothesis: str = Field(
-        description="The selected candidate as one sentence (never a single clause) with one main "
-        "causal claim and a directional verb. Include an explicit comparison (than / rather than / "
-        "relative to); integrate the boundary condition grammatically ('with the effect largest in "
-        "...'); state any control as persistence ('persisting when ... is held constant'); add an "
-        "integrated theory tail ('challenging accounts that ...') only when explanatory. No em-dash "
-        "add-ons.",
+        description="The selected candidate as one sentence with one causal claim, a directional "
+        "verb, and an explicit comparison (than / rather than / relative to); hedge the verb unless "
+        "the evidence establishes the relation.",
     )
     best_id: str = Field(
         default="",

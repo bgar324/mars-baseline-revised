@@ -164,7 +164,7 @@ class Pipeline:
         self._contexts: dict[str, WorkflowContext] = {}
         self._subscribers: dict[str, set[asyncio.Queue[PipelineEvent]]] = {}
 
-    def create_query(self, text: str) -> PipelineState:
+    def create_query(self, text: str, mode: str = "auto") -> PipelineState:
         query_id = uuid4().hex
         now = _now()
         stages: dict[StageName, StageNode] = {}
@@ -176,13 +176,19 @@ class Pipeline:
         self._states[query_id] = PipelineState(
             query_id=query_id, stages=stages, created_at=now, updated_at=now
         )
-        self._contexts[query_id] = WorkflowContext(query_id=query_id, raw_text=text)
+        self._contexts[query_id] = WorkflowContext(
+            query_id=query_id, raw_text=text, mode=mode
+        )
         self._subscribers.setdefault(query_id, set())
         return self._states[query_id]
 
-    async def run_all(self, query_id: str) -> PipelineState:
+    async def run_all(
+        self, query_id: str, *, stop_before: StageName | None = None
+    ) -> PipelineState:
         state = self._require(query_id)
         for node in self._nodes:
+            if stop_before is not None and node.stage == stop_before:
+                break
             await self._run_node(query_id, node)
 
         done = sum(1 for s in state.stages.values() if s.status is StageStatus.COMPLETE)
@@ -197,6 +203,14 @@ class Pipeline:
             f"completed {done}/{len(self._order)} stages in {total_secs:.1f}s",
             format_token_usage(total_usage),
         )
+        return state
+
+    async def run_stage(self, query_id: str, stage: StageName) -> PipelineState:
+        state = self._require(query_id)
+        node = next((n for n in self._nodes if n.stage == stage), None)
+        if node is None:
+            raise NotFoundError(f"stage '{stage}' not found")
+        await self._run_node(query_id, node)
         return state
 
     def get_state(self, query_id: str) -> PipelineState:
