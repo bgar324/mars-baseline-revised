@@ -4,7 +4,6 @@ import { useMemo } from "react"
 import { Streamdown } from "streamdown"
 import type { Components } from "streamdown"
 
-import { useTypewriter } from "@/hooks/use-typewriter"
 import { cn } from "@/lib/utils"
 
 const CARET_CSS = [
@@ -57,14 +56,13 @@ export function StreamingMarkdown({
   className?: string
   mentions?: Mention[]
 }) {
-  const revealed = useTypewriter(text, isStreaming)
   const colors = useMemo(
     () => new Map((mentions ?? []).map((m) => [m.name, m.className])),
     [mentions],
   )
   const content = useMemo(
-    () => linkifyMentions(revealed, [...colors.keys()]),
-    [revealed, colors],
+    () => linkifyMentions(text, [...colors.keys()]),
+    [text, colors],
   )
   const components = useMemo(
     () =>

@@ -2,6 +2,7 @@ from functools import lru_cache
 
 from mars.client.s2 import SemanticScholarClient
 from mars.config.settings import AppSettings, DebateSettings
+from mars.db.study import StudySessionRecorder
 from mars.llm.providers.gemini import GeminiProvider
 from mars.llm.providers.langextract import LangExtractProvider
 from mars.workflow.pipeline import Pipeline, build
@@ -34,6 +35,11 @@ def get_judge_provider() -> GeminiProvider:
 
 
 @lru_cache(maxsize=1)
+def get_study_recorder() -> StudySessionRecorder:
+    return StudySessionRecorder(SETTINGS.supabase)
+
+
+@lru_cache(maxsize=1)
 def get_pipeline() -> Pipeline:
     return build(
         langextract=get_langextract(),
@@ -46,4 +52,5 @@ def get_pipeline() -> Pipeline:
             "minCitationCount": SETTINGS.pipeline.retrieval.min_citation_count
         },
         include_debate=True,
+        recorder=get_study_recorder(),
     )

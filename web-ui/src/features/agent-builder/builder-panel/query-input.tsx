@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowRight, RotateCcw, Sparkles } from "lucide-react"
+import { ArrowRight, RotateCcw } from "lucide-react"
 
 import {
   AlertDialog,
@@ -112,14 +112,7 @@ export function QueryInput() {
             </AlertDialogContent>
           </AlertDialog>
         ) : (
-          <Button
-            variant="outline"
-            size="xs"
-            disabled={draft.trim().length === 0 || isPending}
-          >
-            <Sparkles />
-            Refine
-          </Button>
+          <span className="text-xs text-muted-foreground">Draft</span>
         )}
       </div>
 

@@ -1,7 +1,14 @@
 "use client"
 
-import { Fragment, useMemo } from "react"
-import { Lightbulb, Reply, Sparkles, TriangleAlert } from "lucide-react"
+import { Fragment, useMemo, useState } from "react"
+import {
+  CheckCircle2,
+  ChevronRight,
+  Lightbulb,
+  Reply,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 import { AgentAvatar } from "@/components/common/agent-avatar"
@@ -14,12 +21,18 @@ import { StreamingMarkdown } from "@/components/common/streaming-markdown"
 import type { Mention } from "@/components/common/streaming-markdown"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Checkpoint } from "@/components/ui/checkpoint"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TextShimmer } from "@/components/ui/text-shimmer"
 import { formatElapsed, useElapsed } from "@/features/hypo-canvas/use-elapsed"
 import { useDebate } from "@/hooks/use-debate"
 import { useHypotheses } from "@/hooks/use-hypotheses"
 import { usePapers } from "@/hooks/use-papers"
+import { cn } from "@/lib/utils"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import type { Paper } from "@/types/paper"
 import type { PersonaAgent } from "@/types/persona"
@@ -27,6 +40,7 @@ import type {
   AgentPhase,
   AgentTurn,
   EvidenceWeight,
+  Hypothesis,
   Synthesis,
   TurnAction,
 } from "@/types/debate"
@@ -73,6 +87,8 @@ function usePapersByCorpusId(): Map<string, Paper> {
 
 export function DebatePanel() {
   const { data: debate } = useDebate()
+  const { data: synthesis } = useHypotheses()
+  const [tab, setTab] = useState("conversation")
   const debateStage = useAgentBuilderStore((s) => s.pipelineStages.debate)
   const debateError = useAgentBuilderStore((s) => s.stageErrors.debate)
   const elapsed = useElapsed("debate")
@@ -103,7 +119,8 @@ export function DebatePanel() {
         </div>
       )}
       <Tabs
-        defaultValue="conversation"
+        value={tab}
+        onValueChange={setTab}
         className="flex min-h-0 flex-1 flex-col gap-0"
       >
         <TabsList variant="line" className="mx-4 mt-2 w-auto justify-start">
@@ -124,9 +141,14 @@ export function DebatePanel() {
           value="synthesis"
           className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-4"
         >
-          <SynthesisTab />
+          <SynthesisTab synthesis={synthesis} />
         </TabsContent>
       </Tabs>
+      <HypothesisArrival
+        agents={agents}
+        synthesis={synthesis}
+        onOpen={() => setTab("synthesis")}
+      />
     </div>
   )
 }
@@ -191,7 +213,7 @@ function Conversation({
       {isRunning && (
         <div className="py-3">
           <TextShimmer className="text-s">
-            {synthesizing ? "Synthesizing…" : "Thinking…"}
+            {synthesizing ? "Synthesizing..." : "Thinking..."}
           </TextShimmer>
         </div>
       )}
@@ -275,8 +297,57 @@ type CiteProps = {
   numberOf: (corpusId: string) => number
 }
 
-function SynthesisTab() {
-  const { data: synthesis } = useHypotheses()
+function HypothesisArrival({
+  agents,
+  synthesis,
+  onOpen,
+}: {
+  agents: PersonaAgent[]
+  synthesis: Synthesis | undefined
+  onOpen: () => void
+}) {
+  if (!synthesis?.hypotheses.length) return null
+  const bestId = synthesis.best?.candidate_id || synthesis.meta_review?.best_id
+  const best = synthesis.hypotheses.find((h) => h.id === bestId)
+    ?? synthesis.hypotheses[0]
+
+  return (
+    <div className="shrink-0 border-t bg-background px-4 py-3">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex w-full items-center gap-3 rounded-md border bg-muted/20 px-3 py-2 text-left transition-colors hover:bg-muted/40"
+      >
+        <div className="flex -space-x-1.5">
+          {agents.map((agent) => (
+            <AgentAvatar
+              key={agent.cluster_id}
+              clusterId={agent.cluster_id}
+              name={agent.name}
+              className="size-6 border-2 border-background"
+              fallbackClassName="pt-px text-[9px] leading-none"
+            />
+          ))}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 className="size-3.5 text-primary" />
+            <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+              Arrived at hypothesis
+            </span>
+          </div>
+          <p className="truncate text-s font-medium">
+            {best.id ? `${best.id}: ` : ""}
+            {best.proposition}
+          </p>
+        </div>
+        <ChevronRight className="size-4 text-muted-foreground" />
+      </button>
+    </div>
+  )
+}
+
+function SynthesisTab({ synthesis }: { synthesis: Synthesis | undefined }) {
   const papersByCorpusId = usePapersByCorpusId()
   const numbering = useMemo(() => {
     if (!synthesis) return new Map<string, number>()
@@ -340,53 +411,107 @@ function HypothesisList({
   numberOf,
 }: { synthesis: Synthesis } & CiteProps) {
   if (synthesis.hypotheses.length === 0) return null
-  const bestId = synthesis.best?.candidate_id
-  return (
-    <div className="flex flex-col gap-2">
-      <span className={LABEL}>Candidate hypotheses</span>
-      {synthesis.hypotheses.map((h) => {
-        const isBest = h.id === bestId
-        const grounded = h.grounding
-          .map((id) => ({ id, paper: papersByCorpusId.get(id) }))
-          .filter((g) => g.paper)
-        return (
-          <div
-            key={h.id}
-            className="flex flex-col gap-1.5 rounded-md border px-3 py-2.5"
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="font-mono text-[10px] uppercase text-muted-foreground">
-                {h.id} · {humanizeEnum(h.claim_type)}
-              </span>
-              {isBest && (
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary">
-                  best
-                </span>
-              )}
+  const bestId = synthesis.best?.candidate_id || synthesis.meta_review?.best_id
+  const best =
+    synthesis.hypotheses.find((h) => h.id === bestId) ?? synthesis.hypotheses[0]
+  const candidates = synthesis.hypotheses.filter((h) => h.id !== best.id)
+
+  const body = (
+    <>
+      <span className={LABEL}>Hypothesis</span>
+      <HypothesisCard
+        hypothesis={best}
+        papersByCorpusId={papersByCorpusId}
+        numberOf={numberOf}
+        elevated
+      />
+      {candidates.length > 0 && (
+        <>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="group flex items-center gap-1.5 self-start text-left"
+            >
+              <span className={LABEL}>Candidate hypotheses</span>
+              <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="flex flex-col gap-2">
+              {candidates.map((h) => (
+                <HypothesisCard
+                  key={h.id}
+                  hypothesis={h}
+                  papersByCorpusId={papersByCorpusId}
+                  numberOf={numberOf}
+                />
+              ))}
             </div>
-            <p className="text-s leading-snug">{h.proposition}</p>
-            {h.warrant && (
-              <p className="text-s leading-snug text-muted-foreground">
-                {h.warrant}
-              </p>
-            )}
-            {grounded.length > 0 && (
-              <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                  grounding
-                </span>
-                {grounded.map((g) => (
-                  <InlineCitation
-                    key={g.id}
-                    paper={g.paper!}
-                    index={numberOf(g.id)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )
-      })}
+          </CollapsibleContent>
+        </>
+      )}
+    </>
+  )
+
+  if (candidates.length === 0) {
+    return <div className="flex flex-col gap-3">{body}</div>
+  }
+
+  return <Collapsible className="flex flex-col gap-3">{body}</Collapsible>
+}
+
+function HypothesisCard({
+  hypothesis,
+  papersByCorpusId,
+  numberOf,
+  elevated = false,
+}: {
+  hypothesis: Hypothesis
+  elevated?: boolean
+} & CiteProps) {
+  const grounded = hypothesis.grounding
+    .map((id) => ({ id, paper: papersByCorpusId.get(id) }))
+    .filter((g) => g.paper)
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-1.5 rounded-md border px-3 py-2.5",
+        elevated && "border-primary/40 bg-primary/5",
+      )}
+    >
+      <div className="flex items-center gap-1.5">
+        <span className="font-mono text-[10px] uppercase text-muted-foreground">
+          {hypothesis.id}
+          {hypothesis.id ? " · " : ""}
+          {humanizeEnum(hypothesis.claim_type)}
+        </span>
+        {elevated && (
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary">
+            selected
+          </span>
+        )}
+      </div>
+      <p className="text-s leading-snug">{hypothesis.proposition}</p>
+      {hypothesis.warrant && (
+        <p className="text-s leading-snug text-muted-foreground">
+          {hypothesis.warrant}
+        </p>
+      )}
+      {grounded.length > 0 && (
+        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+          <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+            grounding
+          </span>
+          {grounded.map((g) => (
+            <InlineCitation
+              key={g.id}
+              paper={g.paper!}
+              index={numberOf(g.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

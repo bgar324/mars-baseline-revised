@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 
+import { clearStaleQuery } from "@/hooks/use-stale-query"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import {
   PipelineEventSchema,
@@ -42,7 +43,11 @@ export function useQueryEvents(queryId: string | null): void {
     }
 
     fetch(`/api/query/${queryId}`)
-      .then((r) => (r.ok ? r.json() : null))
+      .then(async (r) => {
+        if (r.ok) return r.json()
+        if (r.status === 404) clearStaleQuery({ status: 404 })
+        return null
+      })
       .then((json) => {
         if (closed || !json) return
         const parsed = PipelineStateSchema.safeParse(json)

@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query"
 
+import { clearStaleQuery } from "@/hooks/use-stale-query"
 import { fetcher } from "@/lib/api/client"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import { ExtractedQuerySchema, type ExtractedQuery } from "@/types/query"
@@ -19,9 +20,14 @@ export function useExtraction() {
   return useQuery({
     queryKey: ["extraction", queryId],
     queryFn: async () => {
-      const data = await fetchExtraction(queryId!)
-      focalClaimSet(data.claim)
-      return data
+      try {
+        const data = await fetchExtraction(queryId!)
+        focalClaimSet(data.claim)
+        return data
+      } catch (error) {
+        clearStaleQuery(error)
+        throw error
+      }
     },
     enabled: ready,
     retry: 0,

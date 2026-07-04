@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query"
 
+import { clearStaleQuery } from "@/hooks/use-stale-query"
 import { fetcher } from "@/lib/api/client"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import { PaperListSchema, type Paper } from "@/types/paper"
@@ -19,7 +20,14 @@ export function usePapers() {
 
   return useQuery({
     queryKey: ["papers", queryId],
-    queryFn: () => fetchPapers(queryId!),
+    queryFn: async () => {
+      try {
+        return await fetchPapers(queryId!)
+      } catch (error) {
+        clearStaleQuery(error)
+        throw error
+      }
+    },
     enabled: ready,
     retry: 0,
     staleTime: Infinity,

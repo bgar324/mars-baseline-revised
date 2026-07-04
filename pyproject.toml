@@ -19,6 +19,7 @@ dependencies = [
     "numpy>=1.26",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
+    "supabase>=2.24.0",
     "torch>=2.0.0",
     "transformers>=4.40.0",
     "umap-learn>=0.5.5",

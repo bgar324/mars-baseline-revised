@@ -18,6 +18,7 @@ const SECTION_LABEL =
   "font-mono text-xs uppercase tracking-wide text-muted-foreground"
 const FIELD_LABEL =
   "font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
+const MAX_DEBATERS = 4
 
 function AgentCard({
   persona,
@@ -111,6 +112,7 @@ function ResearcherPoolInner() {
   const committed = useAgentBuilderStore((s) => s.committed)
   const mode = useAgentBuilderStore((s) => s.mode)
   const debateStage = useAgentBuilderStore((s) => s.pipelineStages.debate)
+  const personaEdits = useAgentBuilderStore((s) => s.personaEdits)
   const { data, isFetching, isError } = usePersonas()
   const { data: perspectives } = usePerspectives()
   const runDebate = useRunDebate()
@@ -138,6 +140,14 @@ function ResearcherPoolInner() {
     })
 
   const checkedIds = [...effective]
+  const selectedPersonas = (data ?? [])
+    .filter((persona) => effective.has(persona.cluster_id))
+    .map((persona) => ({
+      ...persona,
+      ...(personaEdits[persona.cluster_id] ?? {}),
+    }))
+  const invalidSelection =
+    checkedIds.length < 2 || checkedIds.length > MAX_DEBATERS
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -149,14 +159,20 @@ function ResearcherPoolInner() {
         <div className="flex flex-col gap-1.5">
           <Button
             size="sm"
-            onClick={() => runDebate.mutate(checkedIds)}
-            disabled={checkedIds.length < 2 || runDebate.isPending}
+            onClick={() => runDebate.mutate(selectedPersonas)}
+            disabled={invalidSelection || runDebate.isPending}
           >
             Run debate ({checkedIds.length})
           </Button>
           {checkedIds.length < 2 && (
             <p className="text-xs text-muted-foreground">
               Select at least 2 researchers to debate.
+            </p>
+          )}
+          {checkedIds.length > MAX_DEBATERS && (
+            <p className="text-xs text-muted-foreground">
+              Select no more than {MAX_DEBATERS} researchers to control study
+              latency.
             </p>
           )}
           {runDebate.isError && (

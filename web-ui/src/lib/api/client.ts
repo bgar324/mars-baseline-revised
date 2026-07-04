@@ -11,7 +11,17 @@ export class ApiError extends Error {
 }
 
 export function isStaleQueryError(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 404
+  if (!(error instanceof ApiError) || error.status !== 404) return false
+  const body = error.body.toLowerCase()
+  return body.includes("query") && body.includes("not found")
+}
+
+export function isPendingArtifactError(
+  error: unknown,
+  artifact: string,
+): boolean {
+  if (!(error instanceof ApiError) || error.status !== 404) return false
+  return error.body.toLowerCase().includes(`${artifact} not available yet`)
 }
 
 export async function fetcher<T>(

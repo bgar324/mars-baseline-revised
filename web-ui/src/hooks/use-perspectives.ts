@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { z } from "zod"
 
+import { clearStaleQuery } from "@/hooks/use-stale-query"
 import { fetcher } from "@/lib/api/client"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 
@@ -19,7 +20,14 @@ export function usePerspectives() {
 
   return useQuery({
     queryKey: ["perspectives", queryId],
-    queryFn: () => fetchPerspectives(queryId!),
+    queryFn: async () => {
+      try {
+        return await fetchPerspectives(queryId!)
+      } catch (error) {
+        clearStaleQuery(error)
+        throw error
+      }
+    },
     enabled: ready,
     retry: 0,
     staleTime: Infinity,

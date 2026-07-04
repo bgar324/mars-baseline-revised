@@ -24,6 +24,7 @@ venv/
 
 # web-ui dependencies
 /web-ui/node_modules/
+/.pnpm-store/
 /web-ui/.pnp
 /web-ui/.pnp.*
 /web-ui/.yarn/*

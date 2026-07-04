@@ -2,11 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query"
 
-import { fetcher } from "@/lib/api/client"
+import { clearStaleQuery } from "@/hooks/use-stale-query"
+import { fetcher, isPendingArtifactError } from "@/lib/api/client"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import { DebateSchema, type Debate } from "@/types/debate"
 
-async function fetchDebate(queryId: string): Promise<Debate> {
+async function fetchDebate(queryId: string): Promise<Debate | null> {
   return fetcher(`/api/query/${queryId}/debate`, DebateSchema)
 }
 
@@ -18,7 +19,15 @@ export function useDebate() {
 
   return useQuery({
     queryKey: ["debate", queryId],
-    queryFn: () => fetchDebate(queryId!),
+    queryFn: async () => {
+      try {
+        return await fetchDebate(queryId!)
+      } catch (error) {
+        if (isPendingArtifactError(error, "debate")) return null
+        clearStaleQuery(error)
+        throw error
+      }
+    },
     enabled: ready,
     retry: 0,
     refetchInterval: running ? 4000 : false,

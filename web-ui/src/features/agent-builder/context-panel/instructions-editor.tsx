@@ -41,18 +41,11 @@ export function InstructionsEditor({
 }) {
   const personaEdited = useAgentBuilderStore((s) => s.personaEdited)
   const counterRef = useRef(0)
-  const newRowIdRef = useRef<string | null>(null)
+  const [newRowId, setNewRowId] = useState<string | null>(null)
 
   const [rows, setRows] = useState<Row[]>(() =>
     instructions.map((text, i) => ({ id: `i-${i}`, text })),
   )
-
-  useEffect(() => {
-    const sameLength = rows.length === instructions.length
-    const sameText = sameLength && rows.every((r, i) => r.text === instructions[i])
-    if (sameText) return
-    setRows(instructions.map((text, i) => ({ id: `i-${i}`, text })))
-  }, [instructions]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -87,7 +80,7 @@ export function InstructionsEditor({
     if (rows.length >= MAX_INSTRUCTIONS) return
     counterRef.current += 1
     const id = `n-${counterRef.current}`
-    newRowIdRef.current = id
+    setNewRowId(id)
     commit([...rows, { id, text: "" }])
   }
 
@@ -123,11 +116,12 @@ export function InstructionsEditor({
           <div className="flex flex-col gap-1.5">
             {rows.map((row, idx) => (
               <SortableInstruction
-                key={row.id}
+                key={`${row.id}:${row.text}`}
                 id={row.id}
                 value={row.text}
                 canDelete={canDelete}
-                autoFocus={row.id === newRowIdRef.current}
+                autoFocus={row.id === newRowId}
+                onFocused={() => setNewRowId(null)}
                 onChange={(text) => updateAt(idx, text)}
                 onDelete={() => deleteAt(idx)}
               />
@@ -144,6 +138,7 @@ function SortableInstruction({
   value,
   canDelete,
   autoFocus,
+  onFocused,
   onChange,
   onDelete,
 }: {
@@ -151,6 +146,7 @@ function SortableInstruction({
   value: string
   canDelete: boolean
   autoFocus: boolean
+  onFocused: () => void
   onChange: (text: string) => void
   onDelete: () => void
 }) {
@@ -167,12 +163,10 @@ function SortableInstruction({
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
-    setDraft(value)
-  }, [value])
-
-  useEffect(() => {
-    if (autoFocus) inputRef.current?.focus()
-  }, [autoFocus])
+    if (!autoFocus) return
+    inputRef.current?.focus()
+    onFocused()
+  }, [autoFocus, onFocused])
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),

@@ -2,7 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query"
 
-import { fetcher, isStaleQueryError } from "@/lib/api/client"
+import { clearStaleQuery } from "@/hooks/use-stale-query"
+import { fetcher } from "@/lib/api/client"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import { PersonaAgentListSchema, type PersonaAgent } from "@/types/persona"
 
@@ -30,9 +31,7 @@ export function usePersonas() {
         personasSet(data)
         return data
       } catch (error) {
-        if (isStaleQueryError(error)) {
-          useAgentBuilderStore.getState().researchProblemCleared()
-        }
+        clearStaleQuery(error)
         throw error
       }
     },

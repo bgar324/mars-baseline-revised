@@ -5,6 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from mars.llm.providers.base import TokenUsage
+from mars.models.persona import Persona
 
 
 class StageName(str, Enum):
@@ -100,7 +101,12 @@ class QueryRequest(BaseModel):
 
 
 class DebateRunRequest(BaseModel):
-    cluster_ids: list[int]
+    cluster_ids: list[int] = Field(default_factory=list)
+    personas: list[Persona] = Field(default_factory=list)
+
+
+class SessionSnapshotRequest(BaseModel):
+    frontend_snapshot: dict[str, Any] | None = None
 
 
 class ClusterGroup(BaseModel):

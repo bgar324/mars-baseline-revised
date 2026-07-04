@@ -1,6 +1,6 @@
 "use client"
 
-import { RotateCcw } from "lucide-react"
+import { Download, RotateCcw } from "lucide-react"
 
 import {
   AlertDialog,
@@ -30,6 +30,8 @@ import {
   rightPanelRef,
 } from "@/features/hypo-canvas/panel-refs"
 import { useSelectionStore } from "@/features/hypo-canvas/selection-store"
+import { useExportSession } from "@/hooks/use-export-session"
+import { useAgentBuilderStore } from "@/store/agent-builder"
 
 const SIDE_DEFAULT = "30%"
 const SIDE_MIN = "22%"
@@ -41,6 +43,8 @@ const HANDLE_CLASS =
 
 export default function CanvasPage() {
   const selectedNodeId = useSelectionStore((s) => s.selectedNodeId)
+  const queryId = useAgentBuilderStore((s) => s.queryId)
+  const exportSession = useExportSession()
   const resetSession = useSessionReset()
   const leftLabel = "▦ AGENT BUILDER"
   const rightLabel =
@@ -49,11 +53,20 @@ export default function CanvasPage() {
   return (
     <div className="flex h-screen w-screen flex-col">
       <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
-        <div className="w-24" />
+        <div className="w-48" />
         <h1 className="font-sans text-sm uppercase tracking-wide">
           Hypothesis Canvas
         </h1>
-        <div className="flex w-24 justify-end">
+        <div className="flex w-48 justify-end gap-2">
+          <Button
+            variant="outline"
+            size="xs"
+            disabled={!queryId || exportSession.isPending}
+            onClick={() => exportSession.mutate()}
+          >
+            <Download />
+            Export
+          </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" size="xs">

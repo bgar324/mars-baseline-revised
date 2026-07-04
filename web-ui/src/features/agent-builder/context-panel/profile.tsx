@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -96,6 +96,7 @@ export function Profile({ persona }: { persona: PersonaAgent }) {
       <Separator />
 
       <BlurField
+        key={`framing-${persona.cluster_id}-${persona.framing}`}
         label="Framing"
         value={persona.framing}
         rows={3}
@@ -103,6 +104,7 @@ export function Profile({ persona }: { persona: PersonaAgent }) {
       />
 
       <BlurField
+        key={`background-${persona.cluster_id}-${persona.background}`}
         label="Background"
         value={persona.background}
         rows={4}
@@ -112,13 +114,17 @@ export function Profile({ persona }: { persona: PersonaAgent }) {
       <Separator />
 
       <InstructionsEditor
+        key={`instructions-${persona.cluster_id}-${persona.instructions.join("\u0000")}`}
         clusterId={persona.cluster_id}
         instructions={persona.instructions}
       />
 
       <Separator />
 
-      <ConstraintsField persona={persona} />
+      <ConstraintsField
+        key={`constraints-${persona.cluster_id}-${persona.constraints ?? ""}`}
+        persona={persona}
+      />
     </div>
   )
 }
@@ -135,10 +141,6 @@ function BlurField({
   onCommit: (v: string) => void
 }) {
   const [draft, setDraft] = useState(value)
-
-  useEffect(() => {
-    setDraft(value)
-  }, [value])
 
   return (
     <div className="flex flex-col gap-2">
@@ -159,10 +161,6 @@ function BlurField({
 function ConstraintsField({ persona }: { persona: PersonaAgent }) {
   const edit = useAgentBuilderStore((s) => s.personaEdited)
   const [draft, setDraft] = useState(persona.constraints ?? "")
-
-  useEffect(() => {
-    setDraft(persona.constraints ?? "")
-  }, [persona.cluster_id, persona.constraints])
 
   const commit = () => {
     const next = draft.trim() ? draft : null

@@ -16,6 +16,7 @@ from mars.schemas.event import (
     DebateRunRequest,
     PipelineState,
     QueryRequest,
+    SessionSnapshotRequest,
     StageName,
 )
 from mars.schemas.query import ExtractedQuery
@@ -62,6 +63,7 @@ async def create_query(
     pipeline: Pipeline = Depends(get_pipeline),
 ) -> PipelineState:
     state = pipeline.create_query(request.query, request.mode)
+    await pipeline.persist_session(state.query_id)
     if request.mode == "manual":
         _spawn(pipeline.run_all(state.query_id, stop_before=StageName.DEBATE))
     else:
@@ -76,16 +78,58 @@ async def run_debate(
     pipeline: Pipeline = Depends(get_pipeline),
 ) -> PipelineState:
     ctx = require_context(query_id, pipeline)
-    pool = ctx.persona_pool or ctx.personas
-    chosen = set(request.cluster_ids)
-    ctx.personas = [p for p in pool if p.cluster_id in chosen]
+    if request.personas:
+        ctx.personas = request.personas
+    else:
+        pool = ctx.persona_pool or ctx.personas
+        chosen = set(request.cluster_ids)
+        ctx.personas = [p for p in pool if p.cluster_id in chosen]
     if len(ctx.personas) < 2:
         raise HTTPException(
             status_code=400,
             detail="Select at least 2 researchers to debate.",
         )
+    if len(ctx.personas) > 4:
+        raise HTTPException(
+            status_code=400,
+            detail="Select no more than 4 researchers to debate.",
+        )
+    await pipeline.persist_session(query_id)
     _spawn(pipeline.run_stage(query_id, StageName.DEBATE))
     return require_state(query_id, pipeline)
+
+
+@query_router.get("/{query_id}/export")
+async def export_query(
+    query_id: str,
+    pipeline: Pipeline = Depends(get_pipeline),
+) -> dict[str, Any]:
+    try:
+        payload = pipeline.export_session(query_id)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await pipeline.persist_session(query_id, export_payload=payload)
+    return payload
+
+
+@query_router.post("/{query_id}/export")
+async def save_and_export_query(
+    query_id: str,
+    request: SessionSnapshotRequest,
+    pipeline: Pipeline = Depends(get_pipeline),
+) -> dict[str, Any]:
+    try:
+        payload = pipeline.export_session(
+            query_id, frontend_snapshot=request.frontend_snapshot
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await pipeline.persist_session(
+        query_id,
+        frontend_snapshot=request.frontend_snapshot,
+        export_payload=payload,
+    )
+    return payload
 
 
 @query_router.get("/{query_id}")

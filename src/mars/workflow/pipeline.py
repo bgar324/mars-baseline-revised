@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from enum import Enum
 from time import perf_counter
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from loguru import logger as _logger
@@ -36,6 +37,9 @@ from mars.workflow.debate import DebateNode, DebateNodeConfig
 from mars.workflow.persona import PersonaNode, PersonaNodeConfig
 from mars.workflow.query import QueryNode, QueryNodeConfig
 from mars.workflow.retrieval import RetrievalNode
+
+if TYPE_CHECKING:
+    from mars.db.study import StudySessionRecorder
 
 
 class PipelineError(Exception): ...
@@ -156,13 +160,37 @@ class _StepTrace:
         )
 
 
+def _dump(value: Any) -> Any:
+    if value is None:
+        return None
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    if isinstance(value, list):
+        return [_dump(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _dump(v) for k, v in value.items()}
+    return value
+
+
+def _dump_paper(paper) -> dict[str, Any]:
+    data = paper.model_dump(mode="json")
+    data.pop("specter_v2", None)
+    return data
+
+
 class Pipeline:
-    def __init__(self, *, nodes: list[BaseNode]) -> None:
+    def __init__(
+        self,
+        *,
+        nodes: list[BaseNode],
+        recorder: "StudySessionRecorder | None" = None,
+    ) -> None:
         self._nodes = nodes
         self._order = [n.stage for n in nodes]
         self._states: dict[str, PipelineState] = {}
         self._contexts: dict[str, WorkflowContext] = {}
         self._subscribers: dict[str, set[asyncio.Queue[PipelineEvent]]] = {}
+        self._recorder = recorder
 
     def create_query(self, text: str, mode: str = "auto") -> PipelineState:
         query_id = uuid4().hex
@@ -190,6 +218,8 @@ class Pipeline:
             if stop_before is not None and node.stage == stop_before:
                 break
             await self._run_node(query_id, node)
+            if state.stages[node.stage].status is StageStatus.FAILED:
+                break
 
         done = sum(1 for s in state.stages.values() if s.status is StageStatus.COMPLETE)
         total_usage = TokenUsage()
@@ -242,6 +272,64 @@ class Pipeline:
     async def _emit(self, query_id: str, event: PipelineEvent) -> None:
         for queue in list(self._subscribers.get(query_id, ())):
             await queue.put(event)
+        if self._recorder is not None:
+            await self._recorder.record_event(event)
+
+    def export_session(
+        self,
+        query_id: str,
+        *,
+        frontend_snapshot: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        state = self._require(query_id)
+        ctx = self._contexts[query_id]
+        return {
+            "query_id": query_id,
+            "mode": ctx.mode,
+            "research_problem": ctx.raw_text,
+            "state": state.model_dump(mode="json"),
+            "artifacts": {
+                "extracted": _dump(ctx.extracted),
+                "expansion": _dump(ctx.expansion),
+                "questions": _dump(ctx.questions),
+                "anchors": _dump(ctx.anchors),
+                "papers": [_dump_paper(p) for p in ctx.papers],
+                "retrieval_diagnostics": ctx.retrieval_diagnostics or [],
+                "clusters": {
+                    str(cid): [p.id for p in papers]
+                    for cid, papers in (ctx.clusters or {}).items()
+                },
+                "perspectives": ctx.perspectives or [],
+                "personas": _dump(ctx.personas),
+                "persona_pool": _dump(ctx.persona_pool),
+                "debate": _dump(ctx.debate),
+                "cycle": _dump(ctx.cycle),
+                "synthesis": _dump(ctx.cycle.synthesis)
+                if ctx.cycle is not None
+                else None,
+            },
+            "frontend": frontend_snapshot or {},
+            "exported_at": _now().isoformat(),
+        }
+
+    async def persist_session(
+        self,
+        query_id: str,
+        *,
+        frontend_snapshot: dict[str, Any] | None = None,
+        export_payload: dict[str, Any] | None = None,
+    ) -> None:
+        if self._recorder is None:
+            return
+        state = self._require(query_id)
+        ctx = self._contexts[query_id]
+        await self._recorder.upsert_session(
+            state=state,
+            ctx=ctx,
+            backend_snapshot=self.export_session(query_id),
+            frontend_snapshot=frontend_snapshot,
+            export_payload=export_payload,
+        )
 
     async def _run_node(self, query_id: str, node: BaseNode) -> None:
         state = self._states[query_id]
@@ -268,6 +356,7 @@ class Pipeline:
                     timestamp=_now(),
                 ),
             )
+            await self.persist_session(query_id)
             return
 
         stage_node.status = StageStatus.RUNNING
@@ -284,6 +373,7 @@ class Pipeline:
                 timestamp=_now(),
             ),
         )
+        await self.persist_session(query_id)
 
         observer = _StepTrace(self, query_id, node, stage_node, slog)
         started = perf_counter()
@@ -318,6 +408,7 @@ class Pipeline:
                     timestamp=_now(),
                 ),
             )
+            await self.persist_session(query_id)
             return
 
         stage_node.duration_seconds = perf_counter() - started
@@ -336,6 +427,7 @@ class Pipeline:
                 timestamp=_now(),
             ),
         )
+        await self.persist_session(query_id)
 
 
 class Preset(str, Enum):
@@ -372,6 +464,7 @@ def build(
     judge_llm: LLMProvider | None = None,
     retrieval_filters: dict | None = None,
     preset: Preset | None = None,
+    recorder: "StudySessionRecorder | None" = None,
 ) -> Pipeline:
     if preset is not None:
         q, r, c, p, d = preset_configs(preset)
@@ -406,4 +499,4 @@ def build(
     for node in nodes:
         node.validate()
 
-    return Pipeline(nodes=nodes)
+    return Pipeline(nodes=nodes, recorder=recorder)
