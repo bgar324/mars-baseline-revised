@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any, Protocol
@@ -9,13 +10,18 @@ from mars.llm.providers.usage import CallRecord, begin_step, end_step
 from mars.models.debate import BaselineMessage, Cycle, Debate
 from mars.models.persona import Persona
 from mars.models.s2 import Paper
-from mars.schemas.event import StageName
+from mars.schemas.event import EventType, StageName
 from mars.schemas.query import (
     ExtractedQuery,
     HypotheticalQuestions,
     QueryExpansion,
     RetrievalAnchors,
 )
+
+# Emits a fine-grained progress event mid-step (agent thinking/turn, per-anchor
+# retrieval progress, ...). Set on the context by the pipeline for the duration
+# of a node run; ``None`` outside a run and in bare unit tests.
+ProgressSink = Callable[..., Awaitable[None]]
 
 
 @dataclass
@@ -38,6 +44,19 @@ class WorkflowContext:
     debate: Debate | None = None
     cycle: Cycle | None = None
     baseline_messages: list[BaselineMessage] = field(default_factory=list)
+    emit: ProgressSink | None = None
+
+    async def progress(
+        self,
+        event: EventType,
+        *,
+        stage: StageName | None = None,
+        step: str | None = None,
+        payload: Any = None,
+    ) -> None:
+        """Emit a mid-step progress event, or no-op if no sink is attached."""
+        if self.emit is not None:
+            await self.emit(event, stage=stage, step=step, payload=payload)
 
     def require_extracted_query(self) -> ExtractedQuery:
         if self.extracted is None:

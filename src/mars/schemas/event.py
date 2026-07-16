@@ -76,6 +76,9 @@ class EventType(str, Enum):
     STEP_SKIPPED = "step.skipped"
     STEP_COMPLETED = "step.completed"
     STEP_FAILED = "step.failed"
+    STEP_PROGRESS = "step.progress"
+    AGENT_THINKING = "agent.thinking"
+    AGENT_TURN = "agent.turn"
 
 
 class PipelineEvent(BaseModel):

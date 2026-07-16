@@ -86,6 +86,23 @@ export function useQueryEvents(queryId: string | null): void {
             qc.invalidateQueries({ queryKey: ["debate", queryId] })
           }
           break
+        case "agent.thinking": {
+          const p = event.payload as
+            | { agent_id?: string; phase?: string }
+            | undefined
+          if (p?.agent_id)
+            useAgentBuilderStore
+              .getState()
+              .agentThinkingStarted(p.agent_id, p.phase ?? "")
+          break
+        }
+        case "agent.turn": {
+          const p = event.payload as { agent_id?: string } | undefined
+          if (p?.agent_id)
+            useAgentBuilderStore.getState().agentTurnLanded(p.agent_id)
+          qc.invalidateQueries({ queryKey: ["debate", queryId] })
+          break
+        }
         case "step.skipped":
           if (event.step) setStep(event.step, "skipped")
           break
@@ -113,15 +130,24 @@ export function useQueryEvents(queryId: string | null): void {
             set(stage, "complete")
             invalidate(stage)
           }
-          if (stage === "debate") source.close()
+          if (stage === "debate") {
+            useAgentBuilderStore.getState().debateActivityCleared()
+            source.close()
+          }
           break
         case "stage.skipped":
           if (stage) set(stage, "skipped")
-          if (stage === "debate") source.close()
+          if (stage === "debate") {
+            useAgentBuilderStore.getState().debateActivityCleared()
+            source.close()
+          }
           break
         case "stage.failed":
           if (stage) set(stage, "failed", payloadError(event.payload))
-          if (stage === "debate") source.close()
+          if (stage === "debate") {
+            useAgentBuilderStore.getState().debateActivityCleared()
+            source.close()
+          }
           break
         default:
           break

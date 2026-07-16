@@ -166,6 +166,11 @@ function Conversation({
     () => new Map(agents.map((p) => [String(p.cluster_id), p])),
     [agents],
   )
+  const thinkingAgents = useAgentBuilderStore((s) => s.thinkingAgents)
+  const thinkingEntries = useMemo(
+    () => Object.entries(thinkingAgents),
+    [thinkingAgents],
+  )
   const papersByCorpusId = usePapersByCorpusId()
   const agentColors = useAgentColors()
   const mentions = useMemo<Mention[]>(
@@ -210,13 +215,54 @@ function Conversation({
           </Fragment>
         )
       })}
-      {isRunning && (
-        <div className="py-3">
-          <TextShimmer className="text-s">
-            {synthesizing ? "Synthesizing..." : "Thinking..."}
-          </TextShimmer>
-        </div>
+      {isRunning &&
+        (thinkingEntries.length > 0 ? (
+          <div className="flex flex-col gap-2 py-3">
+            {thinkingEntries.map(([agentId, phase]) => (
+              <ThinkingRow
+                key={agentId}
+                persona={personasById.get(agentId)}
+                phase={phase}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="py-3">
+            <TextShimmer className="text-s">
+              {synthesizing ? "Synthesizing..." : "Thinking..."}
+            </TextShimmer>
+          </div>
+        ))}
+    </div>
+  )
+}
+
+function ThinkingRow({
+  persona,
+  phase,
+}: {
+  persona: PersonaAgent | undefined
+  phase: string
+}) {
+  const name = persona?.name ?? "A researcher"
+  const label = phase ? `${name} is thinking · ${humanizeEnum(phase)}` : `${name} is thinking`
+  return (
+    <div className="flex items-center gap-2.5 animate-in fade-in-0 duration-300">
+      {persona ? (
+        <AgentAvatar
+          clusterId={persona.cluster_id}
+          name={persona.name}
+          className="size-5 shrink-0"
+          fallbackClassName="pt-px text-[9px] leading-none"
+        />
+      ) : (
+        <Avatar className="size-5 shrink-0">
+          <AvatarFallback className="bg-muted pt-px text-[9px] leading-none text-muted-foreground">
+            ??
+          </AvatarFallback>
+        </Avatar>
       )}
+      <TextShimmer className="text-s">{label}</TextShimmer>
     </div>
   )
 }

@@ -439,6 +439,28 @@ class Pipeline:
         if self._recorder is not None:
             await self._recorder.record_event(event)
 
+    def _make_emitter(self, query_id: str):
+        async def emit(
+            event: EventType,
+            *,
+            stage: StageName | None = None,
+            step: str | None = None,
+            payload: Any = None,
+        ) -> None:
+            await self._emit(
+                query_id,
+                PipelineEvent(
+                    event=event,
+                    query_id=query_id,
+                    stage=stage,
+                    step=step,
+                    payload=payload,
+                    timestamp=_now(),
+                ),
+            )
+
+        return emit
+
     def export_session(
         self,
         query_id: str,
@@ -486,6 +508,7 @@ class Pipeline:
         *,
         frontend_snapshot: dict[str, Any] | None = None,
         export_payload: dict[str, Any] | None = None,
+        wait: bool = False,
     ) -> None:
         if self._recorder is None:
             return
@@ -497,6 +520,7 @@ class Pipeline:
             backend_snapshot=self.export_session(query_id),
             frontend_snapshot=frontend_snapshot,
             export_payload=export_payload,
+            wait=wait,
         )
 
     async def _run_node(self, query_id: str, node: BaseNode) -> None:
@@ -544,6 +568,7 @@ class Pipeline:
         await self.persist_session(query_id)
 
         observer = _StepTrace(self, query_id, node, stage_node, slog)
+        ctx.emit = self._make_emitter(query_id)
         started = perf_counter()
         try:
             ctx = await node.run(ctx, observer=observer)

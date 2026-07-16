@@ -37,6 +37,8 @@ type AgentBuilderState = {
   personaEdits: Record<number, PersonaPatch>
   agentColors: Record<number, number>
   stageTimings: Record<string, { start: number; end: number | null }>
+  /** Agents mid-turn in the live debate, keyed by agent_id → phase label. */
+  thinkingAgents: Record<string, string>
 }
 
 type AgentBuilderActions = {
@@ -60,6 +62,9 @@ type AgentBuilderActions = {
   agentSelected: (clusterId: number | null) => void
   personaEdited: (clusterId: number, patch: PersonaPatch) => void
   agentColorSet: (clusterId: number, index: number) => void
+  agentThinkingStarted: (agentId: string, phase: string) => void
+  agentTurnLanded: (agentId: string) => void
+  debateActivityCleared: () => void
 }
 
 export const useAgentBuilderStore = create<
@@ -81,6 +86,7 @@ export const useAgentBuilderStore = create<
       personaEdits: {},
       agentColors: {},
       stageTimings: {},
+      thinkingAgents: {},
 
       researchProblemDraftChanged: (text) => set({ draft: text }),
 
@@ -102,6 +108,7 @@ export const useAgentBuilderStore = create<
           personaEdits: {},
           agentColors: {},
           stageTimings: {},
+          thinkingAgents: {},
         }),
 
       personasSet: (personas) => set({ personas }),
@@ -142,6 +149,7 @@ export const useAgentBuilderStore = create<
           pipelineSteps: {},
           stageErrors: {},
           stageTimings: {},
+          thinkingAgents: {},
         }),
 
       pipelineStepSet: (step, status) =>
@@ -163,6 +171,21 @@ export const useAgentBuilderStore = create<
         set((state) => ({
           agentColors: { ...state.agentColors, [clusterId]: index },
         })),
+
+      agentThinkingStarted: (agentId, phase) =>
+        set((state) => ({
+          thinkingAgents: { ...state.thinkingAgents, [agentId]: phase },
+        })),
+
+      agentTurnLanded: (agentId) =>
+        set((state) => {
+          if (!(agentId in state.thinkingAgents)) return state
+          const thinkingAgents = { ...state.thinkingAgents }
+          delete thinkingAgents[agentId]
+          return { thinkingAgents }
+        }),
+
+      debateActivityCleared: () => set({ thinkingAgents: {} }),
     }),
     {
       name: "agent-builder",

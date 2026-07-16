@@ -34,7 +34,7 @@ from mars.models.debate import (
     TurnAction,
 )
 from mars.models.persona import Persona
-from mars.schemas.event import StageName
+from mars.schemas.event import EventType, StageName
 from mars.workflow.base import BaseNode, BaseStep, WorkflowContext, WorkflowError
 
 dlog = logger.bind(source="workflow.debate", stage="debate")
@@ -191,6 +191,25 @@ def validate_turn(resp) -> list[str]:
             )
 
     return errors
+
+
+def turn_payload(persona: Persona, turn) -> dict[str, Any]:
+    """Serialize a produced turn for the ``agent.turn`` progress event so the
+    UI can render each researcher's contribution the instant it lands."""
+    resp = turn.response
+    return {
+        "turn_id": turn.turn_id,
+        "agent_id": str(persona.cluster_id),
+        "agent_name": persona.name,
+        "phase": turn.phase,
+        "action": resp.action.value if resp.action else None,
+        "evidence_weight": resp.evidence_weight.value
+        if resp.evidence_weight
+        else None,
+        "claim": resp.claim,
+        "message": resp.message,
+        "evidence": list(resp.evidence),
+    }
 
 
 def rebuild_concede_message(resp) -> str:
@@ -356,12 +375,54 @@ class DebateRuntime:
             return turn
         return None
 
-    async def propose(self, ctx: WorkflowContext) -> None:
+    async def _run_phase(
+        self,
+        ctx: WorkflowContext,
+        *,
+        turn_type: TurnType,
+        step: str,
+        phase_label: str,
+        assessment: DebateAssessment | None = None,
+    ) -> None:
+        """Run one debate phase across all agents concurrently, appending each
+        turn to the transcript and streaming an event the moment it is produced
+        (rather than batching the whole phase behind a single gather)."""
         cycle = ctx.cycle
-        proposals = await asyncio.gather(
-            *(self._turn(ctx, a, "propose") for a in ctx.debate.agents)
+        lock = asyncio.Lock()
+
+        async def one(persona: Persona) -> None:
+            agent_id = str(persona.cluster_id)
+            await ctx.progress(
+                EventType.AGENT_THINKING,
+                stage=StageName.DEBATE,
+                step=step,
+                payload={
+                    "agent_id": agent_id,
+                    "agent_name": persona.name,
+                    "phase": phase_label,
+                },
+            )
+            turn = await self._turn(ctx, persona, turn_type, assessment)
+            if turn is None:
+                return
+            async with lock:
+                cycle.turns.append(turn)
+            await ctx.progress(
+                EventType.AGENT_TURN,
+                stage=StageName.DEBATE,
+                step=step,
+                payload=turn_payload(persona, turn),
+            )
+
+        await asyncio.gather(*(one(a) for a in ctx.debate.agents))
+
+    async def propose(self, ctx: WorkflowContext) -> None:
+        await self._run_phase(
+            ctx,
+            turn_type="propose",
+            step="debate.proposal",
+            phase_label=PHASE_PROPOSAL,
         )
-        cycle.turns.extend(t for t in proposals if t is not None)
 
     async def assess(self, ctx: WorkflowContext) -> None:
         cycle = ctx.cycle
@@ -376,21 +437,22 @@ class DebateRuntime:
             dlog.warning("assess | consensus collapse: disagreement_present=False")
 
     async def rebut(self, ctx: WorkflowContext) -> None:
-        cycle = ctx.cycle
-        rebuttals = await asyncio.gather(
-            *(
-                self._turn(ctx, a, "respond", cycle.assessment)
-                for a in ctx.debate.agents
-            )
+        await self._run_phase(
+            ctx,
+            turn_type="respond",
+            step="debate.rebuttal",
+            phase_label=PHASE_REBUTTAL,
+            assessment=ctx.cycle.assessment,
         )
-        cycle.turns.extend(t for t in rebuttals if t is not None)
 
     async def refine(self, ctx: WorkflowContext) -> None:
-        cycle = ctx.cycle
-        refinements = await asyncio.gather(
-            *(self._turn(ctx, a, "refine", cycle.assessment) for a in ctx.debate.agents)
+        await self._run_phase(
+            ctx,
+            turn_type="refine",
+            step="debate.refinement",
+            phase_label=PHASE_REFINEMENT,
+            assessment=ctx.cycle.assessment,
         )
-        cycle.turns.extend(t for t in refinements if t is not None)
 
     async def adjudicate(self, ctx: WorkflowContext) -> None:
         cycle = ctx.cycle
