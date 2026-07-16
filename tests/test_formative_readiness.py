@@ -43,6 +43,33 @@ def persona(cluster_id: int) -> Persona:
     )
 
 
+def test_dedupe_roles_disambiguates_collisions() -> None:
+    from mars.workflow.persona import dedupe_roles
+
+    # Three researchers the model independently labelled the same role, plus
+    # a case/whitespace variant that should also count as a collision.
+    people = [persona(1), persona(2), persona(3), persona(4)]
+    people[3].role = "  research   methodologist  "  # normalizes to a dupe
+
+    result = dedupe_roles(people)
+
+    roles = [p.role for p in sorted(result, key=lambda p: p.cluster_id)]
+    # First occurrence keeps its label; every later collision is disambiguated.
+    assert roles[0] == "Research Methodologist"
+    assert all(role != "Research Methodologist" for role in roles[1:])
+    # Uniqueness holds case- and whitespace-insensitively across the panel.
+    assert len({r.casefold() for r in roles}) == len(roles)
+
+
+def test_dedupe_roles_backfills_empty_role() -> None:
+    from mars.workflow.persona import dedupe_roles
+
+    person = persona(1)
+    person.role = "   "
+    (out,) = dedupe_roles([person])
+    assert out.role == "Researcher"
+
+
 def test_debate_request_accepts_full_personas() -> None:
     request = DebateRunRequest(personas=[persona(1), persona(2)])
 
