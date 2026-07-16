@@ -34,6 +34,7 @@ export function useQueryEvents(queryId: string | null): void {
     if (!queryId) return
     let closed = false
     const set = useAgentBuilderStore.getState().pipelineStageSet
+    const setStep = useAgentBuilderStore.getState().pipelineStepSet
 
     const invalidate = (stage: StageName) => {
       const key = ARTIFACT_KEY[stage]
@@ -54,6 +55,9 @@ export function useQueryEvents(queryId: string | null): void {
         if (!parsed.success) return
         for (const [stage, node] of Object.entries(parsed.data.stages)) {
           set(stage as StageName, node.status, node.error ?? undefined)
+          for (const [step, stepNode] of Object.entries(node.steps)) {
+            setStep(step, stepNode.status)
+          }
           if (node.status === "complete") invalidate(stage as StageName)
         }
       })
@@ -72,6 +76,21 @@ export function useQueryEvents(queryId: string | null): void {
       switch (event.event) {
         case "stage.started":
           if (stage) set(stage, "running")
+          break
+        case "step.started":
+          if (event.step) setStep(event.step, "running")
+          break
+        case "step.completed":
+          if (event.step) setStep(event.step, "complete")
+          if (stage === "debate") {
+            qc.invalidateQueries({ queryKey: ["debate", queryId] })
+          }
+          break
+        case "step.skipped":
+          if (event.step) setStep(event.step, "skipped")
+          break
+        case "step.failed":
+          if (event.step) setStep(event.step, "failed")
           break
         case "query.decomposed":
           set("extract", "complete")

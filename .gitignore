@@ -65,3 +65,5 @@ yarn-error.log*
 
 # notebook generation cache
 notebooks/.cache/
+
+baseline_revised.html

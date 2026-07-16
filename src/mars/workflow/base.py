@@ -6,7 +6,7 @@ from typing import Any, Protocol
 from loguru import logger
 
 from mars.llm.providers.usage import CallRecord, begin_step, end_step
-from mars.models.debate import Cycle, Debate
+from mars.models.debate import BaselineMessage, Cycle, Debate
 from mars.models.persona import Persona
 from mars.models.s2 import Paper
 from mars.schemas.event import StageName
@@ -23,6 +23,8 @@ class WorkflowContext:
     query_id: str
     raw_text: str
     mode: str = "auto"
+    condition: str = "mars"
+    test_mode: bool = False
     extracted: ExtractedQuery | None = None
     expansion: QueryExpansion | None = None
     questions: HypotheticalQuestions | None = None
@@ -35,6 +37,7 @@ class WorkflowContext:
     persona_pool: list[Persona] | None = None
     debate: Debate | None = None
     cycle: Cycle | None = None
+    baseline_messages: list[BaselineMessage] = field(default_factory=list)
 
     def require_extracted_query(self) -> ExtractedQuery:
         if self.extracted is None:

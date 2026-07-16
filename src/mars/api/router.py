@@ -7,7 +7,9 @@ from fastapi.responses import StreamingResponse
 from loguru import logger as _logger
 
 from mars.api.dependencies import get_pipeline
-from mars.models.debate import Debate, Synthesis
+from mars.api.dependencies import get_gemini
+from mars.llm.providers.base import LLMProvider
+from mars.models.debate import BaselineConversation, Debate, Synthesis
 from mars.models.persona import Persona
 from mars.models.s2 import Paper
 from mars.schemas.event import (
@@ -20,7 +22,9 @@ from mars.schemas.event import (
     StageName,
 )
 from mars.schemas.query import ExtractedQuery
+from mars.schemas.debate import BaselineChatRequest
 from mars.workflow.base import WorkflowContext
+from mars.workflow.baseline import BaselineChatError, respond_to_researcher
 from mars.workflow.pipeline import NotFoundError, Pipeline
 
 query_router = APIRouter(prefix="/api/v1/queries", tags=["queries"])
@@ -62,9 +66,17 @@ async def create_query(
     request: QueryRequest,
     pipeline: Pipeline = Depends(get_pipeline),
 ) -> PipelineState:
-    state = pipeline.create_query(request.query, request.mode)
+    if request.test_mode and request.condition != "baseline":
+        raise HTTPException(
+            status_code=400, detail="Test mode is only available for baseline sessions."
+        )
+    state = pipeline.create_query(
+        request.query, request.mode, request.condition, request.test_mode
+    )
     await pipeline.persist_session(state.query_id)
-    if request.mode == "manual":
+    if request.test_mode:
+        _spawn(pipeline.run_demo_setup(state.query_id))
+    elif request.mode == "manual":
         _spawn(pipeline.run_all(state.query_id, stop_before=StageName.DEBATE))
     else:
         _spawn(pipeline.run_all(state.query_id))
@@ -95,8 +107,35 @@ async def run_debate(
             detail="Select no more than 4 researchers to debate.",
         )
     await pipeline.persist_session(query_id)
-    _spawn(pipeline.run_stage(query_id, StageName.DEBATE))
+    if ctx.test_mode:
+        _spawn(pipeline.run_demo_debate(query_id))
+    else:
+        _spawn(pipeline.run_stage(query_id, StageName.DEBATE))
     return require_state(query_id, pipeline)
+
+
+@query_router.get("/{query_id}/baseline-chat")
+async def get_baseline_chat(
+    query_id: str, pipeline: Pipeline = Depends(get_pipeline)
+) -> BaselineConversation:
+    ctx = require_context(query_id, pipeline)
+    return BaselineConversation(messages=ctx.baseline_messages)
+
+
+@query_router.post("/{query_id}/baseline-chat")
+async def run_baseline_chat(
+    query_id: str,
+    request: BaselineChatRequest,
+    pipeline: Pipeline = Depends(get_pipeline),
+    llm: LLMProvider = Depends(get_gemini),
+) -> BaselineConversation:
+    ctx = require_context(query_id, pipeline)
+    try:
+        conversation = await respond_to_researcher(ctx, request, llm)
+    except BaselineChatError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await pipeline.persist_session(query_id)
+    return conversation
 
 
 @query_router.get("/{query_id}/export")

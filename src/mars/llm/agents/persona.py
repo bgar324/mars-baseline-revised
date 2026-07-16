@@ -1,5 +1,7 @@
 from mars.llm.prompts.debate import ASSESSMENT, build_debate_prompt
 from mars.llm.prompts.persona import (
+    BASELINE_CHAT_PROMPT,
+    BASELINE_CHAT_SYSTEM_PROMPT,
     PHASE_BY_TURN_TYPE,
     SYSTEM_PROMPT,
     TurnType,
@@ -8,6 +10,8 @@ from mars.llm.prompts.persona import (
 )
 from mars.llm.providers.base import LLMProvider, TokenUsage
 from mars.models.debate import (
+    BaselineAgentResponse,
+    BaselineMessage,
     AgentResponse,
     AgentTurn,
     DebateAssessment,
@@ -121,6 +125,27 @@ def system_prompt(persona: Persona) -> str:
     )
 
 
+def baseline_chat_system_prompt(persona: Persona) -> str:
+    return BASELINE_CHAT_SYSTEM_PROMPT.format(
+        name=persona.name,
+        framing=persona.framing,
+        background=persona.background,
+        reasoning_style=persona.reasoning_style,
+        evaluation_lens=persona.evaluation_lens,
+        instructions=bullet_lines(persona.instructions),
+        constraints=constraints_block(persona.constraints),
+    )
+
+
+def baseline_history(messages: list[BaselineMessage]) -> str:
+    if not messages:
+        return "No follow-up discussion yet."
+    return "\n".join(
+        f"[{message.role}{f' {message.agent_id}' if message.agent_id else ''}] {message.content}"
+        for message in messages[-16:]
+    )
+
+
 class PersonaSpeaker:
     def __init__(self, *, provider: LLMProvider) -> None:
         self._provider = provider
@@ -185,3 +210,42 @@ class PersonaSpeaker:
             response=response,
         )
         return turn, result.usage
+
+    async def respond_to_user(
+        self,
+        *,
+        persona: Persona,
+        evidence: EvidenceSet,
+        research_problem: str,
+        focal_claim: str,
+        meta_review,
+        history: list[BaselineMessage],
+        user_message: str,
+    ) -> BaselineMessage:
+        body = BASELINE_CHAT_PROMPT.format(
+            research_problem=research_problem,
+            focal_claim=focal_claim,
+            previous_work=meta_review.previous_work if meta_review else "Not available.",
+            reasoning=meta_review.reasoning if meta_review else "Not available.",
+            hypothesis=meta_review.hypothesis if meta_review else focal_claim,
+            evidence=evidence_block(evidence),
+            history=baseline_history(history),
+            question=user_message,
+        )
+        result = await self._provider.generate_structured(
+            messages=[
+                {"role": "system", "content": baseline_chat_system_prompt(persona)},
+                {"role": "user", "content": body},
+            ],
+            schema=BaselineAgentResponse,
+            thinking_level="medium",
+        )
+        response = result.parsed
+        available_ids = {snippet.corpus_id for snippet in evidence.snippets}
+        return BaselineMessage(
+            role="agent",
+            agent_id=str(persona.cluster_id),
+            content=clip(response.message, RATIONALE_LIMIT) or "",
+            rationale=clip(response.rationale, RATIONALE_LIMIT),
+            evidence=[item for item in response.evidence if item in available_ids],
+        )

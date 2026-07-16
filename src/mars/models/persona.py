@@ -37,7 +37,12 @@ class PersonaDraft(BaseModel):
         "analogy. mixed: both direct and analogical evidence appear. ungrounded: no cluster evidence "
         "supports the persona."
     )
-    name: str = Field(description="The persona's name as '{Field} · {Facet}'.")
+    role: str = Field(
+        description="A plain-language 2 to 3 word research role, such as HCI Researcher or NLP Methodologist."
+    )
+    perspective: str = Field(
+        description="The stable perspective this researcher brings, written in 1 to 2 concise sentences."
+    )
     framing: str = Field(
         description="How this cluster interprets the focal claim, in one sentence."
     )
@@ -55,6 +60,7 @@ class PersonaDraft(BaseModel):
 
 class Persona(PersonaDraft):
     cluster_id: int
+    name: str
     references: list[str] = Field(
         description="Paper IDs of the cluster papers this persona represents."
     )

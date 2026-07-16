@@ -31,6 +31,8 @@ export const PersonaAgentSchema = z
   .object({
     cluster_id: z.number().int(),
     name: z.string(),
+    role: z.string().default(""),
+    perspective: z.string().default(""),
     framing: z.string(),
     background: z.string(),
     methods_summary: z.string(),

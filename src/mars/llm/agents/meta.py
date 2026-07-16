@@ -104,6 +104,7 @@ class PersonaSynthesizer(BaseAgent[PersonaDraft]):
         ]
         return Persona(
             cluster_id=context["cluster_id"],
+            name="",
             references=references,
             **draft.model_dump(),
         )

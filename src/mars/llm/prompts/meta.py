@@ -10,7 +10,8 @@ You are an expert research-synthesis system that turns a paper cluster into one 
 ## FIELD RULES
 - methods_summary: write the cluster's common study designs, data modalities, populations, and model or analysis families. Infer this field from the sample papers and the given fields_of_study and publication_types.
 - evidence_relation: classify how the cluster's evidence relates to the focal claim. direct = same system, task, phenomenon, and population; analogical = a different system, task, phenomenon, or population transferred by analogy; mixed = both. Judge from fields_of_study and the sample titles.
-- name: write "{Field} · {Facet}". Use the broadest accurate discipline label for Field. Use the feature that most clearly distinguishes this cluster from others in the same field for Facet. Keep it specific. Keep it to 6 words or fewer.
+- role: summarize the community as a familiar 2 to 3 word research role, such as "HCI Researcher", "NLP Methodologist", or "Cognitive Scientist". Prefer language a researcher can recognize immediately. Do not expose reasoning-style or evaluation-lens jargon in this label.
+- perspective: write 1 to 2 concise sentences describing the stable lens this researcher brings to the focal problem. State what they focus on and the concerns or outcomes they prioritize. Do not write a hypothesis, debate position, biography, or list of methods.
 - framing: write one sentence stating the position this community would defend about the focal claim. Name the claim's key variables. Include at most one high-level methodological anchor.
 - background: write 1 to 3 sentences describing the community's methodological tradition and evidence base. Name only families of designs and measures.
 - reasoning_style: write how this community generates and interprets evidence. Do not describe the topic it studies.
@@ -35,7 +36,8 @@ Output:
 {
   "methods_summary": "Preclinical rodent stress paradigms paired with human psychiatric cohorts; assays of DNA methylation and histone modifications in brain and peripheral immune tissue; mechanistic and biomarker designs.",
   "evidence_relation": "direct",
-  "name": "Molecular Psychiatrist · Stress Epigenetics",
+  "role": "Molecular Psychiatry Researcher",
+  "perspective": "Focuses on how stress-related signaling changes gene regulation across brain and immune systems. Prioritizes mechanisms supported by converging animal, clinical, and molecular evidence.",
   "framing": "Chronic stress alters immune function in part through epigenetic regulation, with linked central and peripheral signatures providing the strongest support for that account.",
   "background": "This literature combines animal stress models with clinical psychiatric cohorts to study how stress-related neuroendocrine signaling shapes gene regulation across brain and immune systems. It gives the most weight to converging molecular, biomarker, and translational evidence rather than to findings from any single tissue, population, or assay.",
   "reasoning_style": "mechanistic",

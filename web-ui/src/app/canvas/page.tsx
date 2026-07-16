@@ -74,7 +74,7 @@ export default function CanvasPage() {
                 Reset
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent className="h-fit!">
+            <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle className="tracking-normal">
                   Discard this session?

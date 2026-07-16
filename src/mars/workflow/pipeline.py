@@ -192,7 +192,13 @@ class Pipeline:
         self._subscribers: dict[str, set[asyncio.Queue[PipelineEvent]]] = {}
         self._recorder = recorder
 
-    def create_query(self, text: str, mode: str = "auto") -> PipelineState:
+    def create_query(
+        self,
+        text: str,
+        mode: str = "auto",
+        condition: str = "mars",
+        test_mode: bool = False,
+    ) -> PipelineState:
         query_id = uuid4().hex
         now = _now()
         stages: dict[StageName, StageNode] = {}
@@ -205,10 +211,168 @@ class Pipeline:
             query_id=query_id, stages=stages, created_at=now, updated_at=now
         )
         self._contexts[query_id] = WorkflowContext(
-            query_id=query_id, raw_text=text, mode=mode
+            query_id=query_id,
+            raw_text=text,
+            mode=mode,
+            condition=condition,
+            test_mode=test_mode,
         )
         self._subscribers.setdefault(query_id, set())
         return self._states[query_id]
+
+    async def run_demo_setup(self, query_id: str) -> PipelineState:
+        from mars.workflow.demo import DEMO_SETUP_STEP_DELAYS, populate_setup_stage
+
+        state = self._require(query_id)
+        ctx = self._contexts[query_id]
+        for stage in (
+            StageName.EXTRACT,
+            StageName.RETRIEVE,
+            StageName.CLUSTER,
+            StageName.PERSONA,
+        ):
+            stage_node = state.stages[stage]
+            stage_node.status = StageStatus.RUNNING
+            stage_node.started_at = _now()
+            self._touch(query_id)
+            await self._emit(
+                query_id,
+                PipelineEvent(
+                    event=EventType.STAGE_STARTED,
+                    query_id=query_id,
+                    stage=stage,
+                    timestamp=_now(),
+                ),
+            )
+            for step_name, step_node in stage_node.steps.items():
+                step_node.status = StepStatus.RUNNING
+                step_node.started_at = _now()
+                self._touch(query_id)
+                await self._emit(
+                    query_id,
+                    PipelineEvent(
+                        event=EventType.STEP_STARTED,
+                        query_id=query_id,
+                        stage=stage,
+                        step=step_name,
+                        payload={"test_mode": True},
+                        timestamp=_now(),
+                    ),
+                )
+                await asyncio.sleep(DEMO_SETUP_STEP_DELAYS.get(step_name, 2.0))
+                step_node.status = StepStatus.COMPLETE
+                step_node.completed_at = _now()
+                self._touch(query_id)
+                await self._emit(
+                    query_id,
+                    PipelineEvent(
+                        event=EventType.STEP_COMPLETED,
+                        query_id=query_id,
+                        stage=stage,
+                        step=step_name,
+                        payload={"test_mode": True},
+                        timestamp=_now(),
+                    ),
+                )
+            populate_setup_stage(ctx, stage)
+            stage_node.status = StageStatus.COMPLETE
+            stage_node.completed_at = _now()
+            self._touch(query_id)
+            await self._emit(
+                query_id,
+                PipelineEvent(
+                    event=STAGE_EVENT[stage],
+                    query_id=query_id,
+                    stage=stage,
+                    payload={"test_mode": True},
+                    timestamp=_now(),
+                ),
+            )
+            await self.persist_session(query_id)
+        return state
+
+    async def run_demo_debate(self, query_id: str) -> PipelineState:
+        from mars.workflow.demo import (
+            DEMO_DEBATE_DELAYS,
+            initialize_demo_debate,
+            populate_debate_step,
+        )
+
+        state = self._require(query_id)
+        ctx = self._contexts[query_id]
+        stage_node = state.stages[StageName.DEBATE]
+        initialize_demo_debate(ctx)
+        stage_node.status = StageStatus.RUNNING
+        stage_node.started_at = _now()
+        stage_node.error = None
+        self._touch(query_id)
+        await self._emit(
+            query_id,
+            PipelineEvent(
+                event=EventType.STAGE_STARTED,
+                query_id=query_id,
+                stage=StageName.DEBATE,
+                timestamp=_now(),
+            ),
+        )
+
+        for step_name, step_node in stage_node.steps.items():
+            step_node.status = StepStatus.RUNNING
+            step_node.started_at = _now()
+            await self._emit(
+                query_id,
+                PipelineEvent(
+                    event=EventType.STEP_STARTED,
+                    query_id=query_id,
+                    stage=StageName.DEBATE,
+                    step=step_name,
+                    payload={"test_mode": True},
+                    timestamp=_now(),
+                ),
+            )
+            await asyncio.sleep(DEMO_DEBATE_DELAYS[step_name])
+            populate_debate_step(ctx, step_name)
+            step_node.status = StepStatus.COMPLETE
+            step_node.completed_at = _now()
+            self._touch(query_id)
+            await self._emit(
+                query_id,
+                PipelineEvent(
+                    event=EventType.STEP_COMPLETED,
+                    query_id=query_id,
+                    stage=StageName.DEBATE,
+                    step=step_name,
+                    payload={"test_mode": True},
+                    timestamp=_now(),
+                ),
+            )
+
+        if ctx.cycle is not None:
+            ctx.cycle.status = "complete"
+        if ctx.debate is not None and ctx.cycle is not None and ctx.cycle.synthesis:
+            ctx.debate.hypotheses = list(ctx.cycle.synthesis.hypotheses)
+        stage_node.status = StageStatus.COMPLETE
+        stage_node.completed_at = _now()
+        stage_node.result = {
+            "turns": len(ctx.cycle.turns) if ctx.cycle else 0,
+            "hypotheses": len(ctx.cycle.synthesis.hypotheses)
+            if ctx.cycle and ctx.cycle.synthesis
+            else 0,
+            "test_mode": True,
+        }
+        self._touch(query_id)
+        await self._emit(
+            query_id,
+            PipelineEvent(
+                event=EventType.STAGE_COMPLETED,
+                query_id=query_id,
+                stage=StageName.DEBATE,
+                payload=stage_node.result,
+                timestamp=_now(),
+            ),
+        )
+        await self.persist_session(query_id)
+        return state
 
     async def run_all(
         self, query_id: str, *, stop_before: StageName | None = None
@@ -284,7 +448,10 @@ class Pipeline:
         state = self._require(query_id)
         ctx = self._contexts[query_id]
         return {
+            "schema_version": 1,
             "query_id": query_id,
+            "condition": ctx.condition,
+            "test_mode": ctx.test_mode,
             "mode": ctx.mode,
             "research_problem": ctx.raw_text,
             "state": state.model_dump(mode="json"),
@@ -307,6 +474,7 @@ class Pipeline:
                 "synthesis": _dump(ctx.cycle.synthesis)
                 if ctx.cycle is not None
                 else None,
+                "baseline_messages": _dump(ctx.baseline_messages),
             },
             "frontend": frontend_snapshot or {},
             "exported_at": _now().isoformat(),

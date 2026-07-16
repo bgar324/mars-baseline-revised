@@ -5,11 +5,14 @@ import type { PersonaAgent } from "@/types/persona"
 import type { StageName, StageStatus } from "@/types/query"
 
 export type RunMode = "auto" | "manual"
+export type StudyCondition = "mars" | "baseline"
 
 export type PersonaPatch = Partial<
   Pick<
     PersonaAgent,
     | "name"
+    | "role"
+    | "perspective"
     | "framing"
     | "background"
     | "reasoning_style"
@@ -24,8 +27,10 @@ type AgentBuilderState = {
   committed: string | null
   queryId: string | null
   mode: RunMode
+  studyCondition: StudyCondition
   focalClaim: string | null
   pipelineStages: Partial<Record<StageName, StageStatus>>
+  pipelineSteps: Record<string, StageStatus>
   stageErrors: Partial<Record<StageName, string>>
   personas: PersonaAgent[]
   selectedClusterId: number | null
@@ -36,7 +41,11 @@ type AgentBuilderState = {
 
 type AgentBuilderActions = {
   researchProblemDraftChanged: (text: string) => void
-  researchProblemCommitted: (text: string, queryId: string) => void
+  researchProblemCommitted: (
+    text: string,
+    queryId: string,
+    condition?: StudyCondition,
+  ) => void
   researchProblemCleared: () => void
   modeSet: (mode: RunMode) => void
   focalClaimSet: (claim: string | null) => void
@@ -46,6 +55,7 @@ type AgentBuilderActions = {
     error?: string | null,
   ) => void
   pipelineStagesReset: () => void
+  pipelineStepSet: (step: string, status: StageStatus) => void
   personasSet: (personas: PersonaAgent[]) => void
   agentSelected: (clusterId: number | null) => void
   personaEdited: (clusterId: number, patch: PersonaPatch) => void
@@ -61,8 +71,10 @@ export const useAgentBuilderStore = create<
       committed: null,
       queryId: null,
       mode: "auto",
+      studyCondition: "mars",
       focalClaim: null,
       pipelineStages: {},
+      pipelineSteps: {},
       stageErrors: {},
       personas: [],
       selectedClusterId: null,
@@ -72,16 +84,18 @@ export const useAgentBuilderStore = create<
 
       researchProblemDraftChanged: (text) => set({ draft: text }),
 
-      researchProblemCommitted: (text, queryId) =>
-        set({ draft: text, committed: text, queryId }),
+      researchProblemCommitted: (text, queryId, studyCondition = "mars") =>
+        set({ draft: text, committed: text, queryId, studyCondition }),
 
       researchProblemCleared: () =>
         set({
           draft: "",
           committed: null,
           queryId: null,
+          studyCondition: "mars",
           focalClaim: null,
           pipelineStages: {},
+          pipelineSteps: {},
           stageErrors: {},
           personas: [],
           selectedClusterId: null,
@@ -123,7 +137,17 @@ export const useAgentBuilderStore = create<
         }),
 
       pipelineStagesReset: () =>
-        set({ pipelineStages: {}, stageErrors: {}, stageTimings: {} }),
+        set({
+          pipelineStages: {},
+          pipelineSteps: {},
+          stageErrors: {},
+          stageTimings: {},
+        }),
+
+      pipelineStepSet: (step, status) =>
+        set((state) => ({
+          pipelineSteps: { ...state.pipelineSteps, [step]: status },
+        })),
 
       agentSelected: (clusterId) => set({ selectedClusterId: clusterId }),
 
@@ -142,14 +166,19 @@ export const useAgentBuilderStore = create<
     }),
     {
       name: "agent-builder",
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
-      migrate: (persisted) => persisted as Partial<AgentBuilderState>,
+      migrate: (persisted) => ({
+        ...(persisted as Partial<AgentBuilderState>),
+        studyCondition:
+          (persisted as Partial<AgentBuilderState>).studyCondition ?? "mars",
+      }),
       partialize: (s) => ({
         draft: s.draft,
         committed: s.committed,
         queryId: s.queryId,
         mode: s.mode,
+        studyCondition: s.studyCondition,
         focalClaim: s.focalClaim,
         pipelineStages: s.pipelineStages,
         personas: s.personas,

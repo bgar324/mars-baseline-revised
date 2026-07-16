@@ -98,6 +98,8 @@ STAGE_EVENT: dict[StageName, EventType] = {
 class QueryRequest(BaseModel):
     query: str
     mode: Literal["auto", "manual"] = "auto"
+    condition: Literal["mars", "baseline"] = "mars"
+    test_mode: bool = False
 
 
 class DebateRunRequest(BaseModel):

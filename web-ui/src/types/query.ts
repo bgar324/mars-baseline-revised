@@ -16,10 +16,20 @@ export const StageStatusSchema = z.enum([
   "failed",
 ])
 
+export const StepNodeSchema = z
+  .object({
+    name: z.string(),
+    status: StageStatusSchema,
+    result: z.unknown().nullable().optional(),
+    error: z.string().nullable().optional(),
+  })
+  .passthrough()
+
 export const StageNodeSchema = z
   .object({
     stage: StageNameSchema,
     status: StageStatusSchema,
+    steps: z.record(z.string(), StepNodeSchema).default({}),
     result: z.unknown().nullable().optional(),
     error: z.string().nullable().optional(),
     started_at: z.string().nullable().optional(),
@@ -58,6 +68,7 @@ export const QueryRequestSchema = z.object({
 
 export type StageName = z.infer<typeof StageNameSchema>
 export type StageStatus = z.infer<typeof StageStatusSchema>
+export type StepNode = z.infer<typeof StepNodeSchema>
 export type PipelineState = z.infer<typeof PipelineStateSchema>
 export type PipelineEvent = z.infer<typeof PipelineEventSchema>
 export type ExtractedQuery = z.infer<typeof ExtractedQuerySchema>
