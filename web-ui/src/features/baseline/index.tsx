@@ -66,7 +66,7 @@ import type { PersonaAgent } from "@/types/persona"
 import { humanizeEnum } from "@/utils/format"
 
 const LABEL =
-  "text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground"
+  "text-[11px] font-medium uppercase tracking-normal text-muted-foreground"
 const STAGES = ["extract", "retrieve", "cluster", "persona"] as const
 
 const SETUP_ACTIVITIES: Record<
@@ -482,8 +482,18 @@ function LandingScreen() {
 function getSetupSubSteps(
   stage: (typeof STAGES)[number],
   steps: Record<string, string | undefined>,
+  complete = false,
 ) {
   const configured = SETUP_STEP_ORDER[stage]
+  // A finished stage shows every phase as a completed check, none active.
+  if (complete) {
+    return configured.map((step) => ({
+      step,
+      label: SETUP_ACTIVITIES[step].label,
+      detail: SETUP_ACTIVITIES[step].detail,
+      active: false,
+    }))
+  }
   const available = configured.filter((step) => steps[step] != null)
   const ordered = available.length > 0 ? available : configured
   let activeIndex = ordered.findIndex((step) => steps[step] === "running")
@@ -519,25 +529,26 @@ function PipelineProgress({
         {STAGES.map((stage, index) => {
           const status = stages[stage] ?? "pending"
           const isRunning = status === "running"
+          const isComplete = status === "complete"
+          const hasDropdown = isRunning || isComplete
           const activity = isRunning
             ? getSetupActivity(stage, pipelineSteps)
             : null
-          const subSteps = isRunning
-            ? getSetupSubSteps(stage, pipelineSteps)
+          const subSteps = hasDropdown
+            ? getSetupSubSteps(stage, pipelineSteps, isComplete)
             : []
 
           const circle = (
             <div
               className={cn(
                 "flex size-5 shrink-0 items-center justify-center rounded-full border text-[9px] font-medium",
-                status === "complete" &&
-                  "border-primary bg-primary text-primary-foreground",
+                isComplete && "border-primary bg-primary text-primary-foreground",
                 isRunning && "border-primary text-primary",
                 status === "failed" && "border-destructive text-destructive",
                 status === "pending" && "text-muted-foreground",
               )}
             >
-              {status === "complete" ? <Check className="size-3" /> : index + 1}
+              {isComplete ? <Check className="size-3" /> : index + 1}
             </div>
           )
 
@@ -552,28 +563,31 @@ function PipelineProgress({
             </span>
           )
 
-          const statusText = (
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              {isRunning ? (
-                <TextShimmer>
-                  {activity ? `${activity.index}/${activity.total}` : "working"}
-                </TextShimmer>
-              ) : (
-                status
-              )}
-            </span>
+          const caret = (
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
           )
 
           return (
             <div key={stage} className="border-b last:border-b-0">
-              {isRunning ? (
-                <Collapsible defaultOpen>
+              {hasDropdown ? (
+                <Collapsible
+                  key={isRunning ? "running" : "done"}
+                  defaultOpen={isRunning}
+                >
                   <CollapsibleTrigger className="group flex w-full items-center gap-3 px-4 py-3 text-left">
                     {circle}
                     {label}
                     <div className="ml-auto flex items-center gap-2">
-                      {statusText}
-                      <ChevronDown className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      {isRunning && (
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          <TextShimmer>
+                            {activity
+                              ? `${activity.index}/${activity.total}`
+                              : "working"}
+                          </TextShimmer>
+                        </span>
+                      )}
+                      {caret}
                     </div>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -584,7 +598,11 @@ function PipelineProgress({
                 <div className="flex items-center gap-3 px-4 py-3">
                   {circle}
                   {label}
-                  <div className="ml-auto">{statusText}</div>
+                  {status === "failed" && (
+                    <span className="ml-auto text-[10px] uppercase tracking-wide text-destructive">
+                      Failed
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -758,15 +776,13 @@ function DiscussionWorkspace() {
             evidence={debate?.cycle?.evidence ?? {}}
             papers={papers ?? []}
             onEdit={setEditingId}
-            onStarted={() => setSidebarOpen(false)}
           />
         </aside>
 
         <main className="flex min-w-0 flex-1 flex-col">
           <div className="shrink-0 border-b px-4 py-3 sm:px-8">
             <div className="mx-auto max-w-3xl">
-              <span className={LABEL}>Research problem</span>
-              <p className="mt-1 text-s leading-relaxed font-medium whitespace-normal">
+              <p className="text-s leading-relaxed font-medium whitespace-normal">
                 {committed}
               </p>
             </div>
@@ -796,23 +812,19 @@ function ResearcherSidebar({
   evidence,
   papers,
   onEdit,
-  onStarted,
 }: {
   personas: PersonaAgent[]
   turns: AgentTurn[]
   evidence: Record<string, EvidenceSet>
   papers: Paper[]
   onEdit: (id: number) => void
-  onStarted: () => void
 }) {
   const activeIds = useBaselineStore((state) => state.activeAgentIds)
   const activeAgentsSet = useBaselineStore((state) => state.activeAgentsSet)
   const target = useBaselineStore((state) => state.target)
   const targetSet = useBaselineStore((state) => state.targetSet)
   const debateStage = useAgentBuilderStore((state) => state.pipelineStages.debate)
-  const debateError = useAgentBuilderStore((state) => state.stageErrors.debate)
   const pipelineSteps = useAgentBuilderStore((state) => state.pipelineSteps)
-  const runDebate = useRunDebate()
   const locked = debateStage === "running" || debateStage === "complete"
   const activity = getDebateActivity(pipelineSteps)
 
@@ -833,18 +845,13 @@ function ResearcherSidebar({
     if (typeof target === "number" && !next.includes(target)) targetSet("all")
   }
 
-  const selected = personas.filter((persona) =>
-    activeIds.includes(persona.cluster_id),
-  )
-  const canGenerate = selected.length >= 2 && selected.length <= 4 && !locked
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b px-4 py-3">
         <div className="flex items-end justify-between gap-2">
           <div>
-            <span className={LABEL}>Researcher perspectives</span>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="text-s font-medium">Research team</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
               Select 2–4 researchers for the discussion.
             </p>
           </div>
@@ -852,43 +859,6 @@ function ResearcherSidebar({
             {activeIds.length}/4
           </span>
         </div>
-        <Button
-          className="mt-3 w-full"
-          variant={locked ? "outline" : "shine"}
-          disabled={!canGenerate}
-          onClick={() => {
-            runDebate.mutate(selected)
-            onStarted()
-          }}
-        >
-          <Sparkles />
-          {debateStage === "running"
-            ? activity.label
-            : debateStage === "complete"
-              ? "Hypotheses generated"
-              : "Generate hypotheses"}
-        </Button>
-        {debateStage === "running" && (
-          <div className="mt-2" role="status" aria-live="polite">
-            <div className="mb-1.5 flex items-center justify-between gap-2 text-[9px] uppercase tracking-wide text-muted-foreground">
-              <span className="truncate">Generating hypotheses</span>
-              <span>
-                Step {activity.index} of {activity.total}
-              </span>
-            </div>
-            <div className="h-1 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary transition-[width] duration-500"
-                style={{ width: `${(activity.index / activity.total) * 100}%` }}
-              />
-            </div>
-          </div>
-        )}
-        {(runDebate.error || debateError) && (
-          <p className="mt-2 text-xs text-destructive">
-            {debateError ?? "Could not generate hypotheses."}
-          </p>
-        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -1027,8 +997,7 @@ function ResearcherCard({
       {active && (loading || proposal) && (
         <div className="border-t bg-muted/20 px-3 py-3">
           {loading && (
-            <div className={cn("flex items-start gap-2.5", proposal && "mb-3 border-b pb-3")}>
-              <span className="mt-1.5 size-1.5 shrink-0 animate-pulse rounded-full bg-primary" />
+            <div className={cn(proposal && "mb-3 border-b pb-3")}>
               <div className="min-w-0">
                 <TextShimmer className="text-xs">
                   {activity.cardLabel}
@@ -1076,14 +1045,7 @@ function HypothesisField({
   text: string
 }) {
   return (
-    <div
-      className={cn(
-        "rounded-r-md border-l-2 bg-background/70 px-3 py-2.5",
-        kind === "previous" && "border-l-agent-5",
-        kind === "reasoning" && "border-l-agent-2",
-        kind === "hypothesis" && "border-l-agent-3 bg-agent-3/5",
-      )}
-    >
+    <div className="rounded-md border bg-background px-3 py-2.5">
       <span
         className={cn(
           "text-[9px] uppercase tracking-wide",
@@ -1166,14 +1128,18 @@ function ConversationPanel({
   const target = useBaselineStore((state) => state.target)
   const targetSet = useBaselineStore((state) => state.targetSet)
   const debateStage = useAgentBuilderStore((state) => state.pipelineStages.debate)
+  const debateError = useAgentBuilderStore((state) => state.stageErrors.debate)
   const pipelineSteps = useAgentBuilderStore((state) => state.pipelineSteps)
   const activity = getDebateActivity(pipelineSteps)
+  const runDebate = useRunDebate()
   const send = useSendBaselineMessage()
   const [draft, setDraft] = useState("")
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement | null>(null)
 
   const active = personas.filter((persona) => activeIds.includes(persona.cluster_id))
+  const canGenerate =
+    active.length >= 2 && active.length <= 4 && debateStage !== "running"
   const byId = useMemo(
     () => new Map(personas.map((persona) => [String(persona.cluster_id), persona])),
     [personas],
@@ -1244,6 +1210,23 @@ function ConversationPanel({
                   style={{ width: `${(activity.index / activity.total) * 100}%` }}
                 />
               </div>
+            </div>
+          )}
+          {debateStage !== "running" && (
+            <div className="mt-6">
+              <Button
+                variant="shine"
+                disabled={!canGenerate}
+                onClick={() => runDebate.mutate(active)}
+              >
+                <Sparkles />
+                Generate hypotheses
+              </Button>
+              {(runDebate.error || debateError) && (
+                <p className="mt-3 text-xs text-destructive">
+                  {debateError ?? "Could not generate hypotheses."}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -1373,9 +1356,6 @@ function WorkingHypothesis({ synthesis }: { synthesis: Synthesis }) {
     <Collapsible defaultOpen>
       <div className="overflow-hidden rounded-lg border border-primary/25 bg-primary/4">
         <CollapsibleTrigger className="group flex w-full items-center gap-3 px-4 py-3 text-left">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <Sparkles className="size-4" />
-          </div>
           <div className="min-w-0 flex-1">
             <span className="text-[10px] uppercase tracking-wide text-primary">
               Working hypothesis
