@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Download,
   FlaskConical,
+  Info,
   Menu,
   MessageSquareText,
   RotateCcw,
@@ -37,6 +38,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { TextShimmer } from "@/components/ui/text-shimmer"
@@ -59,7 +65,8 @@ import type { Paper } from "@/types/paper"
 import type { PersonaAgent } from "@/types/persona"
 import { humanizeEnum } from "@/utils/format"
 
-const LABEL = "font-mono text-xs uppercase tracking-wide text-muted-foreground"
+const LABEL =
+  "text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground"
 const STAGES = ["extract", "retrieve", "cluster", "persona"] as const
 
 const SETUP_ACTIVITIES: Record<
@@ -245,6 +252,48 @@ function getDebateActivity(
   }
 }
 
+function useBaselineReset() {
+  const queryClient = useQueryClient()
+  const resetBaseline = useBaselineStore((state) => state.reset)
+  const clearBuilder = useAgentBuilderStore(
+    (state) => state.researchProblemCleared,
+  )
+  return () => {
+    resetBaseline()
+    clearBuilder()
+    queryClient.clear()
+  }
+}
+
+function AppHeader({
+  testMode,
+  left,
+  children,
+}: {
+  testMode?: boolean
+  left?: React.ReactNode
+  children?: React.ReactNode
+}) {
+  return (
+    <header className="relative flex h-12 shrink-0 items-center border-b bg-background px-3 sm:px-4">
+      <div className="flex min-w-0 items-center gap-2">
+        {left}
+        <span className="shrink-0 text-l font-semibold tracking-tight">
+          MARS
+        </span>
+      </div>
+      {testMode && (
+        <span className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 items-center rounded-full border border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary sm:inline-flex">
+          Test mode
+        </span>
+      )}
+      {children && (
+        <div className="ml-auto flex items-center gap-2">{children}</div>
+      )}
+    </header>
+  )
+}
+
 export function BaselineWorkspace() {
   const queryId = useAgentBuilderStore((state) => state.queryId)
   const condition = useAgentBuilderStore((state) => state.studyCondition)
@@ -260,81 +309,169 @@ export function BaselineWorkspace() {
   useHypotheses()
   useBaselineChat()
 
-  if (!queryId || !isBaseline) return <StartScreen />
-  if (personaStage !== "complete") return <PipelineScreen />
-  return <DiscussionWorkspace />
+  if (queryId && isBaseline && personaStage === "complete")
+    return <DiscussionWorkspace />
+  return <LandingScreen />
 }
 
-function StartScreen() {
+const STAGE_LABELS: Record<(typeof STAGES)[number], string> = {
+  extract: "Analyze research problem",
+  retrieve: "Retrieve relevant literature",
+  cluster: "Map research perspectives",
+  persona: "Generate researcher profiles",
+}
+
+function LandingScreen() {
+  const queryId = useAgentBuilderStore((state) => state.queryId)
+  const condition = useAgentBuilderStore((state) => state.studyCondition)
+  const committed = useAgentBuilderStore((state) => state.committed)
+  const stages = useAgentBuilderStore((state) => state.pipelineStages)
+  const pipelineSteps = useAgentBuilderStore((state) => state.pipelineSteps)
+  const errors = useAgentBuilderStore((state) => state.stageErrors)
+  const testMode = useBaselineStore((state) => state.testMode)
+  const reset = useBaselineReset()
+
   const [problem, setProblem] = useState("")
   const create = useCreateBaseline()
   const canSubmit = problem.trim().length > 0 && !create.isPending
-
-  const submit = (testMode = false) => {
-    if (canSubmit) create.mutate({ text: problem.trim(), testMode })
+  const submit = (test = false) => {
+    if (canSubmit) create.mutate({ text: problem.trim(), testMode: test })
   }
 
+  const building = !!queryId && condition === "baseline"
+
   return (
-    <main className="relative flex min-h-dvh overflow-hidden bg-background">
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] bg-[size:44px_44px] opacity-25" />
-      <aside className="relative hidden w-56 shrink-0 border-r bg-sidebar/70 px-7 py-8 md:flex md:flex-col">
-        <div>
-          <div className="font-serif text-xl tracking-tight">MARS</div>
+    <main className="relative flex min-h-dvh flex-col overflow-hidden bg-background">
+      <header className="relative z-10 flex shrink-0 items-center justify-center px-6 py-3.5">
+        {building && testMode && (
+          <span className="pointer-events-none absolute left-6 top-1/2 hidden -translate-y-1/2 items-center rounded-full border border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary sm:inline-flex">
+            Test mode
+          </span>
+        )}
+        <div className="flex items-center gap-1.5">
+          <span className="text-l font-semibold tracking-tight">MARS</span>
+          <HoverCard openDelay={80} closeDelay={80}>
+            <HoverCardTrigger asChild>
+              <button
+                type="button"
+                aria-label="About MARS"
+                className="rounded-full text-muted-foreground/50 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <Info className="size-3.5" />
+              </button>
+            </HoverCardTrigger>
+            <HoverCardContent align="center" className="w-96">
+              <p className="text-s leading-relaxed">
+                <span className="font-medium">MARS</span>
+                <span className="text-muted-foreground">
+                  {" "}
+                  (short for Multi-Agent Research System) turns a research
+                  question into a panel of evidence-grounded researchers, then
+                  has them debate it to reach a working hypothesis you can
+                  interrogate.
+                </span>
+              </p>
+              <ol className="mt-3 space-y-1.5 text-xs leading-relaxed text-muted-foreground">
+                <li>
+                  <span className="font-medium text-foreground">
+                    Retrieve
+                  </span>{" "}
+                  — searches the literature for work relevant to your question.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Cluster</span> —
+                  groups those papers into distinct research perspectives.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Assemble</span>{" "}
+                  — builds a researcher grounded in each perspective.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Debate</span> —
+                  they propose, challenge, and check claims against the evidence
+                  to produce and refine the hypothesis.
+                </li>
+              </ol>
+            </HoverCardContent>
+          </HoverCard>
         </div>
-      </aside>
+        <button
+          type="button"
+          onClick={reset}
+          className={cn(
+            "absolute right-6 top-1/2 -translate-y-1/2 text-xs text-muted-foreground transition-opacity duration-500 hover:text-foreground",
+            building ? "opacity-100" : "pointer-events-none opacity-0",
+          )}
+        >
+          Start over
+        </button>
+      </header>
 
-      <section className="relative flex flex-1 items-center justify-center px-5 py-16">
-        <div className="w-full max-w-2xl animate-in fade-in-0 slide-in-from-bottom-2 duration-500">
-          <h1 className="max-w-xl font-serif text-4xl leading-tight tracking-tight sm:text-5xl">
-            What question should the research team examine?
-          </h1>
-          <p className="mt-4 max-w-lg text-s leading-relaxed text-muted-foreground">
-            MARS will retrieve relevant literature, assemble researcher
-            perspectives, and prepare a working hypothesis for discussion.
-          </p>
+      <section className="relative z-10 flex flex-1 justify-center overflow-y-auto px-5 pb-24 pt-[16vh]">
+        <div className="w-full max-w-2xl">
+          {!building ? (
+            <div>
+            <h1 className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
+              What question should the research team examine?
+            </h1>
 
-          <div className="mt-9 rounded-xl border bg-card p-2 shadow-lg">
-            <Textarea
-              autoFocus
-              value={problem}
-              onChange={(event) => setProblem(event.target.value)}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                  event.preventDefault()
-                  submit(false)
-                }
-              }}
-              placeholder="Describe a research problem, question, or early hypothesis..."
-              className="min-h-36 resize-none border-0 bg-transparent px-4 py-3 text-m shadow-none focus-visible:ring-0 md:text-m"
-            />
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 pt-2">
-              <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                ⌘ Enter to begin
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => submit(true)}
-                  disabled={!canSubmit}
-                >
-                  {create.isPending && create.variables?.testMode
-                    ? "Starting preview..."
-                    : "Test UI · no model spend"}
-                </Button>
-                <Button onClick={() => submit(false)} disabled={!canSubmit}>
-                  {create.isPending && !create.variables?.testMode
-                    ? "Starting..."
-                    : "Build research team"}
-                  <ArrowRight />
-                </Button>
-              </div>
+            <div className="relative mt-8 rounded-xl border bg-card p-2 shadow-sm transition-shadow focus-within:border-ring focus-within:shadow-md">
+              <Textarea
+                autoFocus
+                value={problem}
+                onChange={(event) => setProblem(event.target.value)}
+                onKeyDown={(event) => {
+                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                    event.preventDefault()
+                    submit(false)
+                  }
+                }}
+                placeholder="Describe a research problem, question, or early hypothesis..."
+                className="min-h-36 resize-none border-0 bg-transparent px-4 py-3 pr-16 text-m shadow-none focus-visible:ring-0 md:text-m"
+              />
+              <Button
+                variant="shine"
+                size="icon"
+                onClick={() => submit(false)}
+                disabled={!canSubmit}
+                aria-label="Build research team"
+                className="absolute bottom-3 right-3"
+              >
+                <ArrowRight />
+              </Button>
+            </div>
+            <div className="mt-3 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={() => submit(true)}
+                disabled={!canSubmit}
+                className="text-xs text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+              >
+                {create.isPending && create.variables?.testMode
+                  ? "Starting preview…"
+                  : "Preview without running models"}
+              </button>
+            </div>
+            {create.error && (
+              <p className="mt-3 text-center text-s text-destructive">
+                Could not start the session. Check that the MARS backend is
+                running and try again.
+              </p>
+            )}
+            </div>
+          ) : (
+            <div>
+            <h1 className="text-3xl font-semibold leading-[1.15] tracking-tight sm:text-4xl">
+              {committed || " "}
+            </h1>
+            <div className="mt-8">
+              <PipelineProgress
+                stages={stages}
+                pipelineSteps={pipelineSteps}
+                errors={errors}
+              />
             </div>
           </div>
-          {create.error && (
-            <p className="mt-3 text-s text-destructive">
-              Could not start the session. Check that the MARS backend is
-              running and try again.
-            </p>
           )}
         </div>
       </section>
@@ -342,127 +479,193 @@ function StartScreen() {
   )
 }
 
-function PipelineScreen() {
-  const committed = useAgentBuilderStore((state) => state.committed)
-  const stages = useAgentBuilderStore((state) => state.pipelineStages)
-  const pipelineSteps = useAgentBuilderStore((state) => state.pipelineSteps)
-  const errors = useAgentBuilderStore((state) => state.stageErrors)
+function getSetupSubSteps(
+  stage: (typeof STAGES)[number],
+  steps: Record<string, string | undefined>,
+) {
+  const configured = SETUP_STEP_ORDER[stage]
+  const available = configured.filter((step) => steps[step] != null)
+  const ordered = available.length > 0 ? available : configured
+  let activeIndex = ordered.findIndex((step) => steps[step] === "running")
+  if (activeIndex === -1) {
+    activeIndex = ordered.findIndex(
+      (step) => steps[step] === "pending" || steps[step] == null,
+    )
+  }
+  if (activeIndex === -1) activeIndex = ordered.length - 1
+  // Reveal only the phases reached so far — completed ones plus the active one.
+  return ordered.slice(0, activeIndex + 1).map((step, index) => ({
+    step,
+    label: SETUP_ACTIVITIES[step].label,
+    detail: SETUP_ACTIVITIES[step].detail,
+    active: index === activeIndex,
+  }))
+}
+
+function PipelineProgress({
+  stages,
+  pipelineSteps,
+  errors,
+}: {
+  stages: Record<string, string | undefined>
+  pipelineSteps: Record<string, string | undefined>
+  errors: Record<string, string | undefined>
+}) {
   const failed = STAGES.find((stage) => stages[stage] === "failed")
-  const runningStage = STAGES.find((stage) => stages[stage] === "running")
-  const activity = runningStage
-    ? getSetupActivity(runningStage, pipelineSteps)
-    : null
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-background px-5">
-      <div className="w-full max-w-xl">
-        <h1 className="font-serif text-3xl tracking-tight">
-          Building an evidence-grounded research team
-        </h1>
-        <p className="mt-3 line-clamp-3 text-s leading-relaxed text-muted-foreground">
-          {committed}
-        </p>
+    <div>
+      <div className="overflow-hidden rounded-lg border bg-card">
+        {STAGES.map((stage, index) => {
+          const status = stages[stage] ?? "pending"
+          const isRunning = status === "running"
+          const activity = isRunning
+            ? getSetupActivity(stage, pipelineSteps)
+            : null
+          const subSteps = isRunning
+            ? getSetupSubSteps(stage, pipelineSteps)
+            : []
 
-        {activity && runningStage && (
-          <div
-            className="mt-6 rounded-lg border border-primary/25 bg-primary/4 px-4 py-3.5"
-            role="status"
-            aria-live="polite"
-          >
-            <div className="flex items-start gap-3">
-              <span className="mt-1.5 size-2 shrink-0 animate-pulse rounded-full bg-primary" />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <TextShimmer className="text-s font-medium">
-                    {activity.label}
-                  </TextShimmer>
-                  <span className="font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
-                    {activity.index}/{activity.total}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  {activity.detail}
-                </p>
-                <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary transition-[width] duration-500"
-                    style={{
-                      width: `${(activity.index / activity.total) * 100}%`,
-                    }}
-                  />
-                </div>
-              </div>
+          const circle = (
+            <div
+              className={cn(
+                "flex size-5 shrink-0 items-center justify-center rounded-full border text-[9px] font-medium",
+                status === "complete" &&
+                  "border-primary bg-primary text-primary-foreground",
+                isRunning && "border-primary text-primary",
+                status === "failed" && "border-destructive text-destructive",
+                status === "pending" && "text-muted-foreground",
+              )}
+            >
+              {status === "complete" ? <Check className="size-3" /> : index + 1}
             </div>
-          </div>
-        )}
+          )
 
-        <div className="mt-4 overflow-hidden rounded-lg border bg-card">
-          {STAGES.map((stage, index) => {
-            const status = stages[stage] ?? "pending"
-            return (
-              <div
-                key={stage}
-                className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0"
-              >
-                <div
+          const label = (
+            <span
+              className={cn(
+                "text-s font-medium",
+                status === "pending" && "text-muted-foreground",
+              )}
+            >
+              {STAGE_LABELS[stage]}
+            </span>
+          )
+
+          const statusText = (
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {isRunning ? (
+                <TextShimmer>
+                  {activity ? `${activity.index}/${activity.total}` : "working"}
+                </TextShimmer>
+              ) : (
+                status
+              )}
+            </span>
+          )
+
+          return (
+            <div key={stage} className="border-b last:border-b-0">
+              {isRunning ? (
+                <Collapsible defaultOpen>
+                  <CollapsibleTrigger className="group flex w-full items-center gap-3 px-4 py-3 text-left">
+                    {circle}
+                    {label}
+                    <div className="ml-auto flex items-center gap-2">
+                      {statusText}
+                      <ChevronDown className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SubStepTimeline subSteps={subSteps} />
+                  </CollapsibleContent>
+                </Collapsible>
+              ) : (
+                <div className="flex items-center gap-3 px-4 py-3">
+                  {circle}
+                  {label}
+                  <div className="ml-auto">{statusText}</div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      {failed && (
+        <p className="mt-4 text-s text-destructive">
+          {errors[failed] ?? `The ${failed} stage failed.`}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function SubStepTimeline({
+  subSteps,
+}: {
+  subSteps: { step: string; label: string; detail: string; active: boolean }[]
+}) {
+  return (
+    <div
+      className="border-t bg-muted/20 py-3 pr-4 pl-[1.15rem]"
+      role="status"
+      aria-live="polite"
+    >
+      <ol className="relative">
+        {subSteps.map((subStep, index) => {
+          const isLast = index === subSteps.length - 1
+          return (
+            <li
+              key={subStep.step}
+              className="relative flex gap-3 pb-3 last:pb-0"
+            >
+              {!isLast && (
+                <span className="absolute bottom-0 left-[7.5px] top-4 w-px bg-border" />
+              )}
+              {subStep.active ? (
+                <span className="mt-px size-4 shrink-0 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
+              ) : (
+                <span className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-foreground/55">
+                  <Check className="size-2.5" />
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p
                   className={cn(
-                    "flex size-5 items-center justify-center rounded-full border font-mono text-[9px]",
-                    status === "complete" &&
-                      "border-primary bg-primary text-primary-foreground",
-                    status === "running" && "border-primary text-primary",
-                    status === "failed" &&
-                      "border-destructive text-destructive",
+                    "text-xs leading-tight",
+                    subStep.active
+                      ? "font-medium text-foreground"
+                      : "text-muted-foreground",
                   )}
                 >
-                  {status === "complete" ? <Check className="size-3" /> : index + 1}
-                </div>
-                <span className="text-s font-medium">
-                  {stage === "extract" && "Analyze research problem"}
-                  {stage === "retrieve" && "Retrieve relevant literature"}
-                  {stage === "cluster" && "Map research perspectives"}
-                  {stage === "persona" && "Generate researcher profiles"}
-                </span>
-                <span className="ml-auto font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {status === "running" ? (
-                    <TextShimmer>
-                      {stage === runningStage && activity
-                        ? `${activity.index}/${activity.total}`
-                        : "working"}
-                    </TextShimmer>
-                  ) : (
-                    status
-                  )}
-                </span>
+                  {subStep.label}
+                </p>
+                {subStep.active && (
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {subStep.detail}
+                  </p>
+                )}
               </div>
-            )
-          })}
-        </div>
-        {failed ? (
-          <p className="mt-4 text-s text-destructive">
-            {errors[failed] ?? `The ${failed} stage failed.`}
-          </p>
-        ) : null}
-      </div>
-    </main>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
   )
 }
 
 function DiscussionWorkspace() {
-  const queryClient = useQueryClient()
   const queryId = useAgentBuilderStore((state) => state.queryId)
   const committed = useAgentBuilderStore((state) => state.committed)
   const personas = useAgentBuilderStore((state) => state.personas)
   const edits = useAgentBuilderStore((state) => state.personaEdits)
-  const clearBuilder = useAgentBuilderStore(
-    (state) => state.researchProblemCleared,
-  )
   const { data: debate } = useDebate()
   const { data: synthesis } = useHypotheses()
   const { data: conversation } = useBaselineChat()
   const { data: papers } = usePapers()
   const exportSession = useBaselineExport()
-  const resetBaseline = useBaselineStore((state) => state.reset)
   const testMode = useBaselineStore((state) => state.testMode)
+  const reset = useBaselineReset()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
 
@@ -471,49 +674,38 @@ function DiscussionWorkspace() {
     [personas, edits],
   )
 
-  const reset = () => {
-    resetBaseline()
-    clearBuilder()
-    queryClient.clear()
-  }
-
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background">
-      <header className="flex h-12 shrink-0 items-center border-b bg-background px-3 sm:px-4">
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          className="mr-2 md:hidden"
-          onClick={() => setSidebarOpen(true)}
-          aria-label="Open researcher panel"
-        >
-          <Menu />
-        </Button>
-        <div className="flex min-w-0 items-baseline gap-3">
-          <span className="shrink-0 font-serif text-l">MARS</span>
-          {testMode && (
-            <span className="rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-primary">
-              Test mode · no model calls
-            </span>
-          )}
-        </div>
-        <div className="ml-auto flex items-center gap-2">
+      <AppHeader
+        testMode={testMode}
+        left={
           <Button
-            variant="outline"
-            size="xs"
-            disabled={!queryId || exportSession.isPending}
-            onClick={() => exportSession.mutate()}
+            size="icon-xs"
+            variant="ghost"
+            className="md:hidden"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open researcher panel"
           >
-            <Download />
-            <span className="hidden sm:inline">Export</span>
+            <Menu />
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" size="xs">
-                <RotateCcw />
-                <span className="hidden sm:inline">Reset</span>
-              </Button>
-            </AlertDialogTrigger>
+        }
+      >
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={!queryId || exportSession.isPending}
+          onClick={() => exportSession.mutate()}
+        >
+          <Download />
+          <span className="hidden sm:inline">Export</span>
+        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="xs">
+              <RotateCcw />
+              <span className="hidden sm:inline">Reset</span>
+            </Button>
+          </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle className="tracking-normal">
@@ -532,8 +724,7 @@ function DiscussionWorkspace() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-        </div>
-      </header>
+      </AppHeader>
 
       <div className="flex min-h-0 flex-1">
         <div
@@ -657,7 +848,7 @@ function ResearcherSidebar({
               Select 2–4 researchers for the discussion.
             </p>
           </div>
-          <span className="font-mono text-[10px] text-muted-foreground">
+          <span className="text-[10px] text-muted-foreground">
             {activeIds.length}/4
           </span>
         </div>
@@ -679,7 +870,7 @@ function ResearcherSidebar({
         </Button>
         {debateStage === "running" && (
           <div className="mt-2" role="status" aria-live="polite">
-            <div className="mb-1.5 flex items-center justify-between gap-2 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
+            <div className="mb-1.5 flex items-center justify-between gap-2 text-[9px] uppercase tracking-wide text-muted-foreground">
               <span className="truncate">Generating hypotheses</span>
               <span>
                 Step {activity.index} of {activity.total}
@@ -824,7 +1015,7 @@ function ResearcherCard({
           </button>
         </div>
         <div className="mt-3">
-          <span className="font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
+          <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
             Perspective
           </span>
           <p className="mt-1 line-clamp-4 text-xs leading-relaxed text-muted-foreground">
@@ -895,7 +1086,7 @@ function HypothesisField({
     >
       <span
         className={cn(
-          "font-mono text-[9px] uppercase tracking-wide",
+          "text-[9px] uppercase tracking-wide",
           kind === "previous" && "text-agent-5",
           kind === "reasoning" && "text-agent-2",
           kind === "hypothesis" && "text-agent-3",
@@ -1029,7 +1220,7 @@ function ConversationPanel({
               <MessageSquareText className="size-5 text-muted-foreground" />
             )}
           </div>
-          <h2 className="mt-5 font-serif text-2xl tracking-tight">
+          <h2 className="mt-5 text-2xl font-semibold tracking-tight">
             {debateStage === "running"
               ? "Researchers are developing hypotheses"
               : "Choose your research team"}
@@ -1043,7 +1234,7 @@ function ConversationPanel({
             <div className="mx-auto mt-5 w-full max-w-xs" role="status" aria-live="polite">
               <div className="flex items-center justify-between gap-3">
                 <TextShimmer className="text-xs">{activity.label}</TextShimmer>
-                <span className="shrink-0 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
+                <span className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground">
                   {activity.index}/{activity.total}
                 </span>
               </div>
@@ -1076,7 +1267,7 @@ function ConversationPanel({
 
           {messages.length === 0 && !pendingPrompt && (
             <div className="py-12 text-center">
-              <p className="font-serif text-xl">The research team is ready.</p>
+              <p className="text-xl font-semibold">The research team is ready.</p>
               <p className="mx-auto mt-2 max-w-md text-s leading-relaxed text-muted-foreground">
                 Ask for clarification, challenge an assumption, or query one
                 researcher directly using the controls below.
@@ -1137,7 +1328,7 @@ function ConversationPanel({
             className="max-h-32 min-h-14 resize-none border-0 bg-transparent px-2 py-2 text-s shadow-none focus-visible:ring-0 md:text-s"
           />
           <div className="flex flex-wrap items-center gap-1.5 border-t pt-2">
-            <span className="mr-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="mr-1 text-[10px] uppercase tracking-wide text-muted-foreground">
               Ask
             </span>
             <TargetChip active={target === "all"} onClick={() => targetSet("all")}>
@@ -1186,7 +1377,7 @@ function WorkingHypothesis({ synthesis }: { synthesis: Synthesis }) {
             <Sparkles className="size-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <span className="font-mono text-[10px] uppercase tracking-wide text-primary">
+            <span className="text-[10px] uppercase tracking-wide text-primary">
               Working hypothesis
             </span>
             <p className="mt-0.5 line-clamp-2 text-s font-medium leading-snug">
@@ -1244,7 +1435,7 @@ function MessageRow({
         <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="text-s font-medium">{persona?.name ?? "Researcher"}</span>
           {persona && (
-            <span className="font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
+            <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
               {humanizeEnum(persona.reasoning_style)} perspective
             </span>
           )}
@@ -1255,7 +1446,7 @@ function MessageRow({
         />
         {message.evidence.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-1">
-            <span className="mr-1 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
+            <span className="mr-1 text-[9px] uppercase tracking-wide text-muted-foreground">
               Sources
             </span>
             {message.evidence.map((corpusId, index) => {
@@ -1272,7 +1463,7 @@ function MessageRow({
         )}
         {message.rationale && (
           <Collapsible className="mt-2">
-            <CollapsibleTrigger className="group flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
+            <CollapsibleTrigger className="group flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
               <ChevronDown className="size-3 transition-transform group-data-[state=open]:rotate-180" />
               Response rationale
             </CollapsibleTrigger>
