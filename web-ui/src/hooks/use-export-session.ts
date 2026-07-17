@@ -33,6 +33,7 @@ export function useExportSession() {
         mode: state.mode,
         focalClaim: state.focalClaim,
         pipelineStages: state.pipelineStages,
+        pipelineSteps: state.pipelineSteps,
         stageErrors: state.stageErrors,
         personas: state.personas,
         selectedClusterId: state.selectedClusterId,

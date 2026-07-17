@@ -10,3 +10,8 @@ class DebateRequest(BaseModel):
     cluster_papers: dict[str, list[Paper]] = Field(default_factory=dict)
     query_id: str | None = None
     problem: str | None = None
+
+
+class BaselineChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    agent_ids: list[str] = Field(min_length=1, max_length=4)

@@ -14,7 +14,7 @@ async function createQuery(
 ): Promise<PipelineState> {
   return fetcher("/api/query", PipelineStateSchema, {
     method: "POST",
-    body: JSON.stringify({ query, mode }),
+    body: JSON.stringify({ query, mode, condition: "mars" }),
   })
 }
 
@@ -34,7 +34,7 @@ export function useCreateQuery() {
       useSelectionStore.getState().nodeSelected(null)
 
       const state = await createQuery(text, mode)
-      commit(text, state.query_id)
+      commit(text, state.query_id, "mars")
       pipelineStageSet("extract", "running")
       return { id: state.query_id, text }
     },

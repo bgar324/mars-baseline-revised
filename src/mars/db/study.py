@@ -73,6 +73,7 @@ class StudySessionRecorder:
         status, last_error = _status(state)
         payload: dict[str, Any] = {
             "query_id": state.query_id,
+            "condition": ctx.condition,
             "mode": ctx.mode,
             "research_problem": ctx.raw_text,
             "status": status,

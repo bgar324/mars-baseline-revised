@@ -53,6 +53,21 @@ export const AgentTurnSchema = z
   })
   .passthrough()
 
+export const EvidenceSnippetSchema = z
+  .object({
+    corpus_id: z.string(),
+    title: z.string().default(""),
+    section: z.string().nullable().optional(),
+    text: z.string(),
+    score: z.number().nullable().optional(),
+    tier: z.string(),
+  })
+  .passthrough()
+
+export const EvidenceSetSchema = z.object({
+  snippets: z.array(EvidenceSnippetSchema).default([]),
+})
+
 export const StudyDesignSchema = z
   .object({
     context: z.string(),
@@ -112,6 +127,7 @@ export const CycleSchema = z
     status: CycleStatusSchema,
     steers: z.array(SteerSchema).default([]),
     turns: z.array(AgentTurnSchema).default([]),
+    evidence: z.record(z.string(), EvidenceSetSchema).default({}),
     assessment: z.unknown().nullable().optional(),
     adjudication: z.unknown().nullable().optional(),
     synthesis: SynthesisSchema.nullable().optional(),
@@ -139,6 +155,8 @@ export type ClaimType = z.infer<typeof ClaimTypeSchema>
 export type Steer = z.infer<typeof SteerSchema>
 export type AgentResponse = z.infer<typeof AgentResponseSchema>
 export type AgentTurn = z.infer<typeof AgentTurnSchema>
+export type EvidenceSnippet = z.infer<typeof EvidenceSnippetSchema>
+export type EvidenceSet = z.infer<typeof EvidenceSetSchema>
 export type StudyDesign = z.infer<typeof StudyDesignSchema>
 export type Hypothesis = z.infer<typeof HypothesisSchema>
 export type BestCandidate = z.infer<typeof BestCandidateSchema>

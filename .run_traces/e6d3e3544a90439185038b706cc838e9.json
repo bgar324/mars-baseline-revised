@@ -1,0 +1,671 @@
+{
+  "artifacts": {
+    "anchors": null,
+    "clusters": {},
+    "cycle": null,
+    "debate": null,
+    "expansion": null,
+    "extracted": {
+      "claim": "How does using AI-generated feedback during undergraduate writing assignments affect students\u2019 critical-thinking skills, revision quality, and confidence compared with feedback from human peers?",
+      "raw_text": "How does using AI-generated feedback during undergraduate writing assignments affect students\u2019 critical-thinking skills, revision quality, and confidence compared with feedback from human peers?",
+      "spans": [
+        {
+          "char_span": [
+            0,
+            194
+          ],
+          "id": "claim0",
+          "role": "claim",
+          "text": "How does using AI-generated feedback during undergraduate writing assignments affect students\u2019 critical-thinking skills, revision quality, and confidence compared with feedback from human peers?"
+        }
+      ]
+    },
+    "papers": [],
+    "persona_pool": null,
+    "personas": [],
+    "perspectives": [],
+    "questions": null,
+    "retrieval_diagnostics": [],
+    "synthesis": null
+  },
+  "exported_at": "2026-07-11T06:21:44.428073+00:00",
+  "frontend": {},
+  "iteration_depth": 0,
+  "linked_iterations": [],
+  "mode": "manual",
+  "parent_hypothesis_id": null,
+  "parent_query_id": null,
+  "quality_inspection": {
+    "clusters": [],
+    "coverage": {
+      "cluster_count": 0,
+      "critique_turn_count": 0,
+      "hypothesis_count": 0,
+      "paper_count": 0,
+      "persona_pool_count": 0,
+      "retrieval_diagnostic_count": 0,
+      "selected_persona_count": 0
+    },
+    "critique": {
+      "adjudication": null,
+      "agent_ids": [],
+      "assessment": null,
+      "turns": []
+    },
+    "hypotheses": [],
+    "lineage": {
+      "iteration_depth": 0,
+      "parent_hypothesis_id": null,
+      "parent_query_id": null,
+      "query_id": "e6d3e3544a90439185038b706cc838e9"
+    },
+    "research_problem": "How does using AI-generated feedback during undergraduate writing assignments affect students\u2019 critical-thinking skills, revision quality, and confidence compared with feedback from human peers?",
+    "selected_agents": [],
+    "status": {
+      "completed_stages": 1,
+      "failed_stages": [],
+      "total_stages": 5
+    },
+    "timing": {
+      "stages": {
+        "cluster": {
+          "duration_seconds": null,
+          "error": null,
+          "result": null,
+          "status": "pending",
+          "steps": {
+            "cluster.cluster_papers": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "cluster.embed_papers": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "cluster.select_perspectives": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            }
+          },
+          "usage": null
+        },
+        "debate": {
+          "duration_seconds": null,
+          "error": null,
+          "result": null,
+          "status": "pending",
+          "steps": {
+            "debate.adjudication": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "debate.assessment": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "debate.compose": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "debate.prepare_evidence": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "debate.proposal": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "debate.rebuttal": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "debate.refinement": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "debate.select_best": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "debate.synthesis": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            }
+          },
+          "usage": null
+        },
+        "extract": {
+          "duration_seconds": 0.6687672500002009,
+          "error": null,
+          "result": {
+            "claim": "How does using AI-generated feedback during undergraduate writing assignments affect students\u2019 critical-thinking skills, revision quality, and confidence compared with feedback from human peers?",
+            "constructs": 0,
+            "questions": 0
+          },
+          "status": "complete",
+          "steps": {
+            "query.expand_query": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "skipped",
+              "usage": null
+            },
+            "query.extract_spans": {
+              "duration_seconds": 0.00031791699984751176,
+              "error": null,
+              "result": {
+                "spans": 1
+              },
+              "status": "complete",
+              "usage": {
+                "cached_tokens": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "thinking_tokens": 0,
+                "total_tokens": 0
+              }
+            },
+            "query.generate_questions": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "skipped",
+              "usage": null
+            },
+            "query.synthesize_claim": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "skipped",
+              "usage": null
+            }
+          },
+          "usage": {
+            "cached_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "thinking_tokens": 0,
+            "total_tokens": 0
+          }
+        },
+        "persona": {
+          "duration_seconds": null,
+          "error": null,
+          "result": null,
+          "status": "pending",
+          "steps": {
+            "persona.select_panel": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "persona.synthesize_personas": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            }
+          },
+          "usage": null
+        },
+        "retrieve": {
+          "duration_seconds": null,
+          "error": null,
+          "result": null,
+          "status": "running",
+          "steps": {
+            "retrieval.build_anchors": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "retrieval.expand_corpus": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "retrieval.generate_search_variants": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            },
+            "retrieval.retrieve_candidates": {
+              "duration_seconds": null,
+              "error": null,
+              "result": null,
+              "status": "pending",
+              "usage": null
+            }
+          },
+          "usage": null
+        }
+      },
+      "total_stage_seconds": 0.6687672500002009
+    },
+    "usage": {
+      "cached_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "thinking_tokens": 0,
+      "total_tokens": 0
+    }
+  },
+  "query_id": "e6d3e3544a90439185038b706cc838e9",
+  "research_problem": "How does using AI-generated feedback during undergraduate writing assignments affect students\u2019 critical-thinking skills, revision quality, and confidence compared with feedback from human peers?",
+  "role_personas": [
+    {
+      "background": "Reviews whether the research direction matches core concepts, assumptions, and practical constraints in the target field.",
+      "constraints": null,
+      "evaluation_lens": "construct_validity",
+      "id": "domain-expert",
+      "instructions": [
+        "Check whether the hypothesis uses field concepts accurately.",
+        "Identify domain assumptions that need evidence or clarification.",
+        "Suggest changes that make the research question more meaningful to field experts."
+      ],
+      "name": "Domain Expert",
+      "reasoning_style": "theoretical",
+      "specialty": "Subject-matter fit",
+      "stance": "Checks whether the hypothesis is meaningful in the target field."
+    },
+    {
+      "background": "Evaluates whether the hypothesis can be translated into a credible study design with measurable variables and defensible comparisons.",
+      "constraints": null,
+      "evaluation_lens": "internal_validity",
+      "id": "methods-critic",
+      "instructions": [
+        "Press on construct measurement, sampling, and comparison groups.",
+        "Name confounds or design threats that could undermine the claim.",
+        "Recommend concrete study-design revisions before the hypothesis advances."
+      ],
+      "name": "Methods Critic",
+      "reasoning_style": "interventional",
+      "specialty": "Study design",
+      "stance": "Looks for measurable constructs, confounds, and viable comparisons."
+    },
+    {
+      "background": "Looks across adjacent literatures to connect the hypothesis to known findings, debates, and missing evidence.",
+      "constraints": null,
+      "evaluation_lens": "convergence",
+      "id": "literature-scout",
+      "instructions": [
+        "Relate the hypothesis to nearby bodies of prior work.",
+        "Distinguish genuine gaps from already-addressed questions.",
+        "Suggest search directions or evidence types that would sharpen novelty."
+      ],
+      "name": "Literature Scout",
+      "reasoning_style": "comparative",
+      "specialty": "Prior work",
+      "stance": "Connects the idea to adjacent papers and unresolved gaps."
+    },
+    {
+      "background": "Judges whether the research direction makes a distinctive contribution and pushes vague ideas toward testable, surprising claims.",
+      "constraints": null,
+      "evaluation_lens": "predictive_power",
+      "id": "novelty-reviewer",
+      "instructions": [
+        "Identify what is incremental, obvious, or underspecified.",
+        "Push the hypothesis toward a sharper contribution.",
+        "Propose refinements that make the claim more testable and distinctive."
+      ],
+      "name": "Novelty Reviewer",
+      "reasoning_style": "theoretical",
+      "specialty": "Contribution",
+      "stance": "Pushes the idea toward a sharper, less obvious research claim."
+    }
+  ],
+  "state": {
+    "created_at": "2026-07-11T06:21:41.981433Z",
+    "iteration_depth": 0,
+    "parent_hypothesis_id": null,
+    "parent_query_id": null,
+    "query_id": "e6d3e3544a90439185038b706cc838e9",
+    "stages": {
+      "cluster": {
+        "completed_at": null,
+        "duration_seconds": null,
+        "error": null,
+        "result": null,
+        "stage": "cluster",
+        "started_at": null,
+        "status": "pending",
+        "steps": {
+          "cluster.cluster_papers": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "cluster.cluster_papers",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "cluster.embed_papers": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "cluster.embed_papers",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "cluster.select_perspectives": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "cluster.select_perspectives",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          }
+        },
+        "usage": null
+      },
+      "debate": {
+        "completed_at": null,
+        "duration_seconds": null,
+        "error": null,
+        "result": null,
+        "stage": "debate",
+        "started_at": null,
+        "status": "pending",
+        "steps": {
+          "debate.adjudication": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "debate.adjudication",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "debate.assessment": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "debate.assessment",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "debate.compose": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "debate.compose",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "debate.prepare_evidence": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "debate.prepare_evidence",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "debate.proposal": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "debate.proposal",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "debate.rebuttal": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "debate.rebuttal",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "debate.refinement": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "debate.refinement",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "debate.select_best": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "debate.select_best",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "debate.synthesis": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "debate.synthesis",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          }
+        },
+        "usage": null
+      },
+      "extract": {
+        "completed_at": "2026-07-11T06:21:43.975568Z",
+        "duration_seconds": 0.6687672500002009,
+        "error": null,
+        "result": {
+          "claim": "How does using AI-generated feedback during undergraduate writing assignments affect students\u2019 critical-thinking skills, revision quality, and confidence compared with feedback from human peers?",
+          "constructs": 0,
+          "questions": 0
+        },
+        "stage": "extract",
+        "started_at": "2026-07-11T06:21:42.588701Z",
+        "status": "complete",
+        "steps": {
+          "query.expand_query": {
+            "completed_at": "2026-07-11T06:21:43.722447Z",
+            "duration_seconds": null,
+            "error": null,
+            "name": "query.expand_query",
+            "result": null,
+            "started_at": null,
+            "status": "skipped",
+            "usage": null
+          },
+          "query.extract_spans": {
+            "completed_at": "2026-07-11T06:21:43.452264Z",
+            "duration_seconds": 0.00031791699984751176,
+            "error": null,
+            "name": "query.extract_spans",
+            "result": {
+              "spans": 1
+            },
+            "started_at": "2026-07-11T06:21:43.306825Z",
+            "status": "complete",
+            "usage": {
+              "cached_tokens": 0,
+              "input_tokens": 0,
+              "output_tokens": 0,
+              "thinking_tokens": 0,
+              "total_tokens": 0
+            }
+          },
+          "query.generate_questions": {
+            "completed_at": "2026-07-11T06:21:43.845498Z",
+            "duration_seconds": null,
+            "error": null,
+            "name": "query.generate_questions",
+            "result": null,
+            "started_at": null,
+            "status": "skipped",
+            "usage": null
+          },
+          "query.synthesize_claim": {
+            "completed_at": "2026-07-11T06:21:43.635739Z",
+            "duration_seconds": null,
+            "error": null,
+            "name": "query.synthesize_claim",
+            "result": null,
+            "started_at": null,
+            "status": "skipped",
+            "usage": null
+          }
+        },
+        "usage": {
+          "cached_tokens": 0,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "thinking_tokens": 0,
+          "total_tokens": 0
+        }
+      },
+      "persona": {
+        "completed_at": null,
+        "duration_seconds": null,
+        "error": null,
+        "result": null,
+        "stage": "persona",
+        "started_at": null,
+        "status": "pending",
+        "steps": {
+          "persona.select_panel": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "persona.select_panel",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "persona.synthesize_personas": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "persona.synthesize_personas",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          }
+        },
+        "usage": null
+      },
+      "retrieve": {
+        "completed_at": null,
+        "duration_seconds": null,
+        "error": null,
+        "result": null,
+        "stage": "retrieve",
+        "started_at": "2026-07-11T06:21:44.296212Z",
+        "status": "running",
+        "steps": {
+          "retrieval.build_anchors": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "retrieval.build_anchors",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "retrieval.expand_corpus": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "retrieval.expand_corpus",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "retrieval.generate_search_variants": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "retrieval.generate_search_variants",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          },
+          "retrieval.retrieve_candidates": {
+            "completed_at": null,
+            "duration_seconds": null,
+            "error": null,
+            "name": "retrieval.retrieve_candidates",
+            "result": null,
+            "started_at": null,
+            "status": "pending",
+            "usage": null
+          }
+        },
+        "usage": null
+      }
+    },
+    "updated_at": "2026-07-11T06:21:44.296216Z"
+  }
+}

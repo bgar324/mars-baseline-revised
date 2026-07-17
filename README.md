@@ -27,8 +27,8 @@ SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
 ```
 
-Apply the schema in `supabase/migrations/20260704130000_study_sessions.sql`
-to the configured Supabase project before study sessions.
+Apply the schemas in `supabase/migrations/` to the configured Supabase project
+before study sessions.
 
 Frontend (Next.js, port 3000):
 
@@ -45,7 +45,7 @@ pnpm approve-builds --all
 pnpm install
 ```
 
-The frontend calls the backend at `http://localhost:8000` (override with `API_URL` in `web-ui/.env.local`). Open http://localhost:3000/canvas.
+The frontend calls the backend at `http://localhost:8000` (override with `API_URL` in `web-ui/.env.local`). Open http://localhost:3000/canvas for MARS or http://localhost:3000/baseline for the linear study baseline.
 
 ## Recommended formative-study demo path
 

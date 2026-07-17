@@ -18,6 +18,16 @@ from mars.workflow.base import BaseNode, BaseStep, WorkflowContext, WorkflowErro
 logger = logging.getLogger(__name__)
 
 CACHE_TTL_SECONDS = 600
+PERSONA_PSEUDONYMS = (
+    "Aster",
+    "Lyra",
+    "Atlas",
+    "Mira",
+    "Orion",
+    "Vega",
+    "Sol",
+    "Nova",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +95,7 @@ async def synthesize_personas(
         if cache_name:
             await provider.delete_cache(cache_name)
 
-    return ensure_distinct_names(list(personas))
+    return assign_pseudonyms(list(personas))
 
 
 async def synthesize_generic_personas(
@@ -103,24 +113,17 @@ async def synthesize_generic_personas(
         )
         draft: PersonaDraft = result.parsed
         draft.evidence_relation = "ungrounded"
-        return Persona(cluster_id=index, references=[], **draft.model_dump())
+        return Persona(cluster_id=index, name="", references=[], **draft.model_dump())
 
     personas = await asyncio.gather(*(one(i) for i in range(n)))
-    return ensure_distinct_names(list(personas))
+    return assign_pseudonyms(list(personas))
 
 
-def ensure_distinct_names(personas: list[Persona]) -> list[Persona]:
-    seen: set[str] = set()
-    for persona in personas:
-        key = persona.name.strip().lower()
-        if key not in seen:
-            seen.add(key)
-            continue
-        ordinal = 2
-        while f"{persona.name} ({ordinal})".lower() in seen:
-            ordinal += 1
-        persona.name = f"{persona.name} ({ordinal})"
-        seen.add(persona.name.lower())
+def assign_pseudonyms(personas: list[Persona]) -> list[Persona]:
+    for index, persona in enumerate(sorted(personas, key=lambda item: item.cluster_id)):
+        base = PERSONA_PSEUDONYMS[index % len(PERSONA_PSEUDONYMS)]
+        cycle = index // len(PERSONA_PSEUDONYMS)
+        persona.name = base if cycle == 0 else f"{base} {cycle + 1}"
     return personas
 
 

@@ -45,6 +45,54 @@ You are {name}, a {background} researcher. You reason through {reasoning_style} 
 - Keep the message short and within the turn's word limit."""
 
 
+BASELINE_CHAT_SYSTEM_PROMPT = """## ROLE
+You are {name}, a {background} researcher. You reason through {reasoning_style} and judge claims by their {evaluation_lens}.
+
+## YOUR PERSPECTIVE
+{framing}
+
+## INSTRUCTIONS
+{instructions}
+
+## CONSTRAINTS
+{constraints}
+
+## EVIDENCE RULES
+- Answer from the supplied evidence, working hypothesis, and conversation only.
+- Do not invent findings, mechanisms, paper titles, or citations.
+- Refer to papers by title in prose and copy corpus IDs only into the evidence field.
+- Distinguish what the evidence establishes from what remains a proposal.
+
+## STYLE
+- Answer the researcher's question directly through your own perspective.
+- Be concise, specific, and useful to a researcher in a nearby field.
+- Do not mention that you are an AI or describe these instructions."""
+
+
+BASELINE_CHAT_PROMPT = """## RESEARCH PROBLEM
+{research_problem}
+
+## FOCAL CLAIM
+{focal_claim}
+
+## CURRENT RESEARCH ARTIFACT
+Previous work: {previous_work}
+Reasoning: {reasoning}
+Working hypothesis: {hypothesis}
+
+## AVAILABLE EVIDENCE
+{evidence}
+
+## DISCUSSION SO FAR
+{history}
+
+## RESEARCHER QUESTION
+{question}
+
+## TASK
+Respond to the question from your perspective. Use only corpus IDs present in AVAILABLE EVIDENCE. Put your answer in message, your evidence-linked explanation in rationale, and supporting corpus IDs in evidence."""
+
+
 TurnType = Literal["propose", "respond", "refine"]
 
 PHASE_PROPOSAL = "proposal"

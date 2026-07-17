@@ -51,9 +51,9 @@
   --sidebar-ring: oklch(0.7687 0.0913 233.3989);
 
   /* fonts */
-  --font-sans: Google Sans, ui-sans-serif, sans-serif, system-ui;
-  --font-serif: Trykker, ui-serif, serif;
-  --font-mono: Fragment Mono, ui-monospace, monospace;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Menlo", monospace;
 
   /* shadows */
   --shadow-x: 0;
@@ -123,9 +123,9 @@
   --sidebar-ring: oklch(0.8549 0.0889 221.7700);
 
   /* fonts */
-  --font-sans: Google Sans, ui-sans-serif, sans-serif, system-ui;
-  --font-serif: Trykker, ui-serif, serif;
-  --font-mono: Fragment Mono, ui-monospace, monospace;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Menlo", monospace;
 
   /* shadows */
   --shadow-x: 0;
@@ -200,9 +200,9 @@
   --color-sidebar-ring: var(--sidebar-ring);
 
   /* fonts */
-  --font-sans: Google Sans, ui-sans-serif, sans-serif, system-ui;
-  --font-mono: Fragment Mono, ui-monospace, monospace;
-  --font-serif: Trykker, ui-serif, serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Menlo", monospace;
+  --font-serif: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-sans);
 
   /* font sizes (2px step) */

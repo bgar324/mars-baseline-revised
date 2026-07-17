@@ -394,6 +394,33 @@ class Synthesis(BaseModel):
     )
 
 
+class BaselineAgentResponse(BaseModel):
+    message: str = Field(
+        description="A concise answer to the researcher's question in plain language."
+    )
+    rationale: str = Field(
+        description="One to three sentences explaining how the evidence and persona lens support the answer."
+    )
+    evidence: list[str] = Field(
+        default_factory=list,
+        description="Corpus IDs from the supplied evidence that support the answer.",
+    )
+
+
+class BaselineMessage(BaseModel):
+    message_id: str = Field(default_factory=lambda: uuid4().hex)
+    role: Literal["user", "agent"]
+    content: str
+    agent_id: AgentId | None = None
+    rationale: str | None = None
+    evidence: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class BaselineConversation(BaseModel):
+    messages: list[BaselineMessage] = Field(default_factory=list)
+
+
 class Cycle(BaseModel):
     cycle_id: str = Field(default_factory=lambda: uuid4().hex)
     cycle: int = 1
