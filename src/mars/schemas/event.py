@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from mars.llm.providers.base import TokenUsage
 from mars.models.persona import Persona
+from mars.models.s2 import Paper
 
 
 class StageName(str, Enum):
@@ -108,6 +109,7 @@ class QueryRequest(BaseModel):
 class DebateRunRequest(BaseModel):
     cluster_ids: list[int] = Field(default_factory=list)
     personas: list[Persona] = Field(default_factory=list)
+    papers: list[Paper] = Field(default_factory=list)
 
 
 class SessionSnapshotRequest(BaseModel):

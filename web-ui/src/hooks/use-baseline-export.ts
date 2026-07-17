@@ -45,6 +45,8 @@ export function useBaselineExport() {
               activeAgentIds: baseline.activeAgentIds,
               target: baseline.target,
               personaEdits: builder.personaEdits,
+              manualPersonas: baseline.manualPersonas,
+              manualPapers: baseline.manualPapers,
               pipelineStages: builder.pipelineStages,
               pipelineSteps: builder.pipelineSteps,
               stageErrors: builder.stageErrors,

@@ -1,6 +1,7 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
+from mars.api.router import create_query as create_query_endpoint
 from mars.llm.providers.base import (
     LLMProvider,
     LLMResponse,
@@ -19,6 +20,7 @@ from mars.models.debate import (
     Synthesis,
 )
 from mars.models.persona import Persona
+from mars.models.s2 import Paper
 from mars.schemas.debate import BaselineChatRequest
 from mars.schemas.event import DebateRunRequest, QueryRequest, StageName
 from mars.workflow.baseline import respond_to_researcher
@@ -71,9 +73,14 @@ def test_dedupe_roles_backfills_empty_role() -> None:
 
 
 def test_debate_request_accepts_full_personas() -> None:
-    request = DebateRunRequest(personas=[persona(1), persona(2)])
+    paper = Paper(id="paper-1", title="Selected source")
+    request = DebateRunRequest(
+        personas=[persona(1), persona(2)],
+        papers=[paper],
+    )
 
     assert request.cluster_ids == []
+    assert request.papers == [paper]
     assert [p.name for p in request.personas] == ["Researcher 1", "Researcher 2"]
 
 
@@ -151,6 +158,26 @@ def test_export_payload_contains_core_session_fields() -> None:
 def test_query_request_defaults_to_mars_condition() -> None:
     assert QueryRequest(query="A question").condition == "mars"
     assert QueryRequest(query="A question", condition="baseline").condition == "baseline"
+
+
+def test_baseline_query_starts_without_automatic_pipeline() -> None:
+    pipeline = Pipeline(nodes=[MarkerNode()])
+    request = QueryRequest(
+        query="How does AI assistance affect scientific judgment?",
+        mode="manual",
+        condition="baseline",
+    )
+
+    with patch("mars.api.router._spawn") as spawn:
+        state = asyncio.run(create_query_endpoint(request, pipeline))
+
+    ctx = pipeline.get_context(state.query_id)
+    spawn.assert_not_called()
+    assert ctx.extracted is not None
+    assert ctx.extracted.claim == request.query
+    assert ctx.papers == []
+    assert ctx.personas == []
+    assert state.stages[StageName.RETRIEVE].status == "skipped"
 
 
 class FakeChatProvider(LLMProvider):

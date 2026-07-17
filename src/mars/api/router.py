@@ -2,16 +2,17 @@ import asyncio
 from collections.abc import AsyncIterator, Coroutine
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from loguru import logger as _logger
 
-from mars.api.dependencies import get_pipeline
-from mars.api.dependencies import get_gemini
+from mars.api.dependencies import get_gemini, get_pipeline, get_s2
+from mars.client.s2 import SemanticScholarClient, SemanticScholarError
 from mars.llm.providers.base import LLMProvider
 from mars.models.debate import BaselineConversation, Debate, Synthesis
 from mars.models.persona import Persona
 from mars.models.s2 import Paper
+from mars.schemas.debate import BaselineChatRequest
 from mars.schemas.event import (
     ClusterAssignment,
     ClusterGroup,
@@ -22,7 +23,6 @@ from mars.schemas.event import (
     StageName,
 )
 from mars.schemas.query import ExtractedQuery
-from mars.schemas.debate import BaselineChatRequest
 from mars.workflow.base import WorkflowContext
 from mars.workflow.baseline import BaselineChatError, respond_to_researcher
 from mars.workflow.pipeline import NotFoundError, Pipeline
@@ -74,6 +74,8 @@ async def create_query(
         request.query, request.mode, request.condition, request.test_mode
     )
     await pipeline.persist_session(state.query_id, wait=True)
+    if request.condition == "baseline":
+        return state
     if request.test_mode:
         _spawn(pipeline.run_demo_setup(state.query_id))
     elif request.mode == "manual":
@@ -90,6 +92,14 @@ async def run_debate(
     pipeline: Pipeline = Depends(get_pipeline),
 ) -> PipelineState:
     ctx = require_context(query_id, pipeline)
+    if request.papers:
+        ctx.papers = list(
+            {
+                paper.id: paper
+                for paper in [*ctx.papers, *request.papers]
+                if paper.id
+            }.values()
+        )
     if request.personas:
         ctx.personas = request.personas
     else:
@@ -207,6 +217,25 @@ async def get_papers(
     query_id: str, pipeline: Pipeline = Depends(get_pipeline)
 ) -> list[Paper]:
     return require_context(query_id, pipeline).papers
+
+
+@query_router.get("/{query_id}/paper-search")
+async def search_papers(
+    query_id: str,
+    q: str = Query(min_length=2, max_length=300),
+    limit: int = Query(default=10, ge=1, le=10),
+    offset: int = Query(default=0, ge=0, le=40),
+    pipeline: Pipeline = Depends(get_pipeline),
+    s2: SemanticScholarClient = Depends(get_s2),
+) -> list[Paper]:
+    require_context(query_id, pipeline)
+    try:
+        return await s2.search(q, limit=limit, offset=offset)
+    except SemanticScholarError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Semantic Scholar search is temporarily unavailable.",
+        ) from exc
 
 
 @query_router.get("/{query_id}/clusters")

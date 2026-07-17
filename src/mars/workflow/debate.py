@@ -265,7 +265,12 @@ class DebateRuntime:
 
         async def prep(agent: Persona) -> None:
             agent_id = str(agent.cluster_id)
-            cluster_ids = [p.id for p in cluster_papers.get(agent_id, [])]
+            cluster_ids = list(
+                dict.fromkeys(
+                    agent.references
+                    or [p.id for p in cluster_papers.get(agent_id, [])]
+                )
+            )
             bundle, _ = await self._scout.for_persona(
                 agent_id=agent_id,
                 framing=agent.framing,

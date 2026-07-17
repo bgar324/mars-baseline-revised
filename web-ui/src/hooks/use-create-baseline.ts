@@ -35,7 +35,6 @@ export function useCreateBaseline() {
 
       builder.modeSet("manual")
       builder.researchProblemCommitted(text, state.query_id, "baseline")
-      builder.pipelineStageSet("extract", "running")
       useBaselineStore.getState().sessionStarted(testMode)
       return state
     },

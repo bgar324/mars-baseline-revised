@@ -4,14 +4,19 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import {
   ArrowRight,
+  BookOpen,
   Check,
   ChevronDown,
   Download,
+  ExternalLink,
   FlaskConical,
   Info,
+  LoaderCircle,
   Menu,
   MessageSquareText,
+  Plus,
   RotateCcw,
+  Search,
   Send,
   Sparkles,
   X,
@@ -53,6 +58,11 @@ import { useCreateBaseline } from "@/hooks/use-create-baseline"
 import { useDebate } from "@/hooks/use-debate"
 import { useHypotheses } from "@/hooks/use-hypotheses"
 import { usePapers } from "@/hooks/use-papers"
+import {
+  PAPER_SEARCH_MAX_RESULTS,
+  PAPER_SEARCH_PAGE_SIZE,
+  usePaperSearch,
+} from "@/hooks/use-paper-search"
 import { usePersonas } from "@/hooks/use-personas"
 import { useQueryEvents } from "@/hooks/use-query-events"
 import { useRunDebate } from "@/hooks/use-run-debate"
@@ -68,6 +78,28 @@ import { humanizeEnum } from "@/utils/format"
 const LABEL =
   "text-[11px] font-medium uppercase tracking-normal text-muted-foreground"
 const STAGES = ["extract", "retrieve", "cluster", "persona"] as const
+
+function createManualPersona(clusterId: number): PersonaAgent {
+  return {
+    cluster_id: clusterId,
+    name: "",
+    role: "",
+    perspective: "",
+    framing: "",
+    background: "Manually defined research perspective.",
+    methods_summary: "Selected literature and user-defined expertise.",
+    evidence_relation: "direct",
+    reasoning_style: "theoretical",
+    evaluation_lens: "construct_validity",
+    references: [],
+    instructions: [
+      "Argue from the stated perspective.",
+      "Ground claims in the selected papers.",
+      "State uncertainty and important limitations.",
+    ],
+    constraints: null,
+  }
+}
 
 const SETUP_ACTIVITIES: Record<
   string,
@@ -305,9 +337,6 @@ function AppHeader({
 export function BaselineWorkspace() {
   const queryId = useAgentBuilderStore((state) => state.queryId)
   const condition = useAgentBuilderStore((state) => state.studyCondition)
-  const personaStage = useAgentBuilderStore(
-    (state) => state.pipelineStages.persona,
-  )
   const isBaseline = condition === "baseline"
 
   useQueryEvents(isBaseline ? queryId : null)
@@ -317,8 +346,7 @@ export function BaselineWorkspace() {
   useHypotheses()
   useBaselineChat()
 
-  if (queryId && isBaseline && personaStage === "complete")
-    return <DiscussionWorkspace />
+  if (queryId && isBaseline) return <DiscussionWorkspace />
   return <LandingScreen />
 }
 
@@ -689,16 +717,69 @@ function DiscussionWorkspace() {
   const { data: synthesis } = useHypotheses()
   const { data: conversation } = useBaselineChat()
   const { data: papers } = usePapers()
+  const manualPersonas = useBaselineStore((state) => state.manualPersonas)
+  const manualPapers = useBaselineStore((state) => state.manualPapers)
+  const manualPersonaAdded = useBaselineStore(
+    (state) => state.manualPersonaAdded,
+  )
+  const manualPersonaEdited = useBaselineStore(
+    (state) => state.manualPersonaEdited,
+  )
+  const manualPersonaRemoved = useBaselineStore(
+    (state) => state.manualPersonaRemoved,
+  )
+  const editGeneratedPersona = useAgentBuilderStore(
+    (state) => state.personaEdited,
+  )
   const exportSession = useBaselineExport()
   const testMode = useBaselineStore((state) => state.testMode)
   const reset = useBaselineReset()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [newPerspectiveId, setNewPerspectiveId] = useState<number | null>(null)
 
   const mergedPersonas = useMemo(
-    () => personas.map((persona) => ({ ...persona, ...edits[persona.cluster_id] })),
-    [personas, edits],
+    () => [
+      ...personas.map((persona) => ({
+        ...persona,
+        ...edits[persona.cluster_id],
+      })),
+      ...manualPersonas,
+    ],
+    [personas, edits, manualPersonas],
   )
+  const allPapers = useMemo(
+    () => [
+      ...new Map(
+        [...(papers ?? []), ...manualPapers].map((paper) => [paper.id, paper]),
+      ).values(),
+    ],
+    [papers, manualPapers],
+  )
+
+  const addPerspective = () => {
+    const clusterId =
+      Math.max(999, ...mergedPersonas.map((persona) => persona.cluster_id)) + 1
+    manualPersonaAdded(createManualPersona(clusterId))
+    setNewPerspectiveId(clusterId)
+    setEditingId(clusterId)
+  }
+
+  const editPersona = (clusterId: number, patch: Partial<PersonaAgent>) => {
+    if (manualPersonas.some((persona) => persona.cluster_id === clusterId)) {
+      manualPersonaEdited(clusterId, patch)
+      return
+    }
+    editGeneratedPersona(clusterId, patch)
+  }
+
+  const closeEditor = (save = false) => {
+    if (!save && editingId === newPerspectiveId && editingId != null) {
+      manualPersonaRemoved(editingId)
+    }
+    setEditingId(null)
+    setNewPerspectiveId(null)
+  }
 
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background">
@@ -782,8 +863,9 @@ function DiscussionWorkspace() {
             personas={mergedPersonas}
             turns={debate?.cycle?.turns ?? []}
             evidence={debate?.cycle?.evidence ?? {}}
-            papers={papers ?? []}
+            papers={allPapers}
             onEdit={setEditingId}
+            onAdd={addPerspective}
           />
         </aside>
 
@@ -799,7 +881,7 @@ function DiscussionWorkspace() {
             personas={mergedPersonas}
             synthesis={synthesis}
             messages={conversation?.messages ?? []}
-            papers={papers ?? []}
+            papers={allPapers}
           />
         </main>
       </div>
@@ -807,7 +889,18 @@ function DiscussionWorkspace() {
       {editingId != null && (
         <PersonaEditor
           persona={mergedPersonas.find((item) => item.cluster_id === editingId)}
-          onClose={() => setEditingId(null)}
+          papers={allPapers}
+          isNew={editingId === newPerspectiveId}
+          isManual={manualPersonas.some(
+            (persona) => persona.cluster_id === editingId,
+          )}
+          onEdit={editPersona}
+          onCancel={() => closeEditor(false)}
+          onDone={() => closeEditor(true)}
+          onRemove={() => {
+            manualPersonaRemoved(editingId)
+            closeEditor(true)
+          }}
         />
       )}
     </div>
@@ -820,12 +913,14 @@ function ResearcherSidebar({
   evidence,
   papers,
   onEdit,
+  onAdd,
 }: {
   personas: PersonaAgent[]
   turns: AgentTurn[]
   evidence: Record<string, EvidenceSet>
   papers: Paper[]
   onEdit: (id: number) => void
+  onAdd: () => void
 }) {
   const activeIds = useBaselineStore((state) => state.activeAgentIds)
   const activeAgentsSet = useBaselineStore((state) => state.activeAgentsSet)
@@ -859,9 +954,23 @@ function ResearcherSidebar({
       <div className="shrink-0 border-b px-4 py-3">
         <div className="flex items-end justify-between gap-2">
           <div>
-            <p className="text-s font-medium">Research team</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-s font-medium">Research team</p>
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="ghost"
+                disabled={locked}
+                onClick={onAdd}
+                aria-label="Add perspective"
+                title="Add perspective"
+                className="-my-1 text-muted-foreground hover:text-foreground"
+              >
+                <Plus />
+              </Button>
+            </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Select 2–4 researchers for the discussion.
+              Build and select 2–4 perspectives for the discussion.
             </p>
           </div>
           <span className="text-[10px] text-muted-foreground">
@@ -871,40 +980,54 @@ function ResearcherSidebar({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        <div className="flex flex-col gap-2.5">
-          {personas.map((persona) => {
-            const active = activeIds.includes(persona.cluster_id)
-            const agentEvidence = evidence[String(persona.cluster_id)]
-            const proposal = turns.find(
-              (turn) =>
-                turn.agent_id === String(persona.cluster_id) &&
-                turn.phase === "proposal",
-            )
-            return (
-              <ResearcherCard
-                key={persona.cluster_id}
-                persona={persona}
-                active={active}
-                locked={locked}
-                loading={debateStage === "running" && active}
-                livePhase={thinkingAgents[String(persona.cluster_id)]}
-                proposal={proposal}
-                activity={activity}
-                evidenceCount={
-                  agentEvidence?.snippets.length ?? 0
-                }
-                previousWork={formatPreviousWork(
-                  persona,
-                  proposal,
-                  papers,
-                  agentEvidence,
-                )}
-                onToggle={() => toggle(persona.cluster_id)}
-                onEdit={() => onEdit(persona.cluster_id)}
-              />
-            )
-          })}
-        </div>
+        {personas.length === 0 ? (
+          <div className="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed bg-background px-5 text-center">
+            <div className="flex size-9 items-center justify-center rounded-full border bg-muted/25 text-muted-foreground">
+              <Plus className="size-4" />
+            </div>
+            <p className="mt-3 text-s font-medium">Build your research team</p>
+            <p className="mt-1 max-w-52 text-xs leading-relaxed text-muted-foreground">
+              Add each perspective manually, then ground it in papers you choose.
+            </p>
+            <Button className="mt-4" size="sm" onClick={onAdd}>
+              <Plus />
+              Add first perspective
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {personas.map((persona) => {
+              const active = activeIds.includes(persona.cluster_id)
+              const agentEvidence = evidence[String(persona.cluster_id)]
+              const proposal = turns.find(
+                (turn) =>
+                  turn.agent_id === String(persona.cluster_id) &&
+                  turn.phase === "proposal",
+              )
+              return (
+                <ResearcherCard
+                  key={persona.cluster_id}
+                  persona={persona}
+                  active={active}
+                  locked={locked}
+                  loading={debateStage === "running" && active}
+                  livePhase={thinkingAgents[String(persona.cluster_id)]}
+                  proposal={proposal}
+                  activity={activity}
+                  evidenceCount={agentEvidence?.snippets.length ?? 0}
+                  previousWork={formatPreviousWork(
+                    persona,
+                    proposal,
+                    papers,
+                    agentEvidence,
+                  )}
+                  onToggle={() => toggle(persona.cluster_id)}
+                  onEdit={() => onEdit(persona.cluster_id)}
+                />
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1515,33 +1638,95 @@ function TargetChip({
 
 function PersonaEditor({
   persona,
-  onClose,
+  papers,
+  isNew,
+  isManual,
+  onEdit,
+  onCancel,
+  onDone,
+  onRemove,
 }: {
   persona: PersonaAgent | undefined
-  onClose: () => void
+  papers: Paper[]
+  isNew: boolean
+  isManual: boolean
+  onEdit: (clusterId: number, patch: Partial<PersonaAgent>) => void
+  onCancel: () => void
+  onDone: () => void
+  onRemove: () => void
 }) {
-  const edit = useAgentBuilderStore((state) => state.personaEdited)
+  const [paperQuery, setPaperQuery] = useState("")
+  const [paperPage, setPaperPage] = useState(1)
+  const searchPapers = usePaperSearch()
+  const manualPapersAdded = useBaselineStore(
+    (state) => state.manualPapersAdded,
+  )
   if (!persona) return null
+
+  const selectedIds = new Set(persona.references)
+  const searchResultCount = searchPapers.data?.length ?? 0
+  const pageStart = (paperPage - 1) * PAPER_SEARCH_PAGE_SIZE
+  const pageResults = (searchPapers.data ?? []).slice(
+    pageStart,
+    pageStart + PAPER_SEARCH_PAGE_SIZE,
+  )
+  const pageResultIds = new Set(pageResults.map((paper) => paper.id))
+  const selectedPapers = persona.references
+    .map((id) => papers.find((paper) => paper.id === id))
+    .filter(
+      (paper): paper is Paper => !!paper && !pageResultIds.has(paper.id),
+    )
+  const complete =
+    persona.name.trim().length > 0 &&
+    persona.role.trim().length > 0 &&
+    (persona.perspective || persona.framing).trim().length > 0
+
+  const submitSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const query = paperQuery.trim()
+    if (query.length >= 2) {
+      setPaperPage(1)
+      void searchPapers.mutate(query)
+    }
+  }
+
+  const togglePaper = (paper: Paper) => {
+    const references = selectedIds.has(paper.id)
+      ? persona.references.filter((id) => id !== paper.id)
+      : [...persona.references, paper.id]
+    if (!selectedIds.has(paper.id)) manualPapersAdded([paper])
+    onEdit(persona.cluster_id, { references })
+  }
+
   return (
     <div className="fixed inset-0 z-[60] flex justify-end bg-foreground/20 backdrop-blur-sm">
       <button
         type="button"
         className="absolute inset-0 cursor-default"
-        onClick={onClose}
+        onClick={onCancel}
         aria-label="Close researcher editor"
       />
-      <aside className="relative flex h-full w-full max-w-md flex-col border-l bg-background shadow-2xl animate-in slide-in-from-right duration-200">
+      <aside className="relative flex h-full w-full max-w-lg flex-col border-l bg-background shadow-2xl animate-in slide-in-from-right duration-200">
         <div className="flex shrink-0 items-center gap-3 border-b px-5 py-4">
           <AgentAvatar
             clusterId={persona.cluster_id}
-            name={persona.name}
+            name={persona.name || "New perspective"}
             className="size-9"
           />
           <div className="min-w-0 flex-1">
-            <span className={LABEL}>Edit researcher</span>
-            <p className="truncate text-s font-medium">{persona.name}</p>
+            <span className={LABEL}>
+              {isNew ? "Build perspective" : "Edit perspective"}
+            </span>
+            <p className="truncate text-s font-medium">
+              {persona.name || "Untitled perspective"}
+            </p>
           </div>
-          <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label="Close">
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            onClick={onCancel}
+            aria-label="Close"
+          >
             <X />
           </Button>
         </div>
@@ -1552,8 +1737,10 @@ function PersonaEditor({
               <Input
                 value={persona.name}
                 onChange={(event) =>
-                  edit(persona.cluster_id, { name: event.target.value })
+                  onEdit(persona.cluster_id, { name: event.target.value })
                 }
+                placeholder="e.g. Dr. Maya Chen"
+                autoFocus={isNew}
               />
             </label>
             <label className="flex flex-col gap-2">
@@ -1561,7 +1748,7 @@ function PersonaEditor({
               <Input
                 value={persona.role}
                 onChange={(event) =>
-                  edit(persona.cluster_id, { role: event.target.value })
+                  onEdit(persona.cluster_id, { role: event.target.value })
                 }
                 placeholder="e.g. HCI Researcher"
               />
@@ -1570,26 +1757,258 @@ function PersonaEditor({
               <span className={LABEL}>Perspective</span>
               <Textarea
                 value={persona.perspective || persona.framing}
-                onChange={(event) =>
-                  edit(persona.cluster_id, { perspective: event.target.value })
-                }
+                onChange={(event) => {
+                  const perspective = event.target.value
+                  onEdit(persona.cluster_id, {
+                    perspective,
+                    framing: perspective,
+                  })
+                }}
                 rows={6}
                 className="resize-none bg-background text-s md:text-s"
+                placeholder="Describe the lens this researcher brings, what they focus on, and the concerns or outcomes they prioritize."
               />
             </label>
-            <div className="border-t pt-5">
-              <InstructionsEditor
-                key={`instructions-${persona.cluster_id}-${persona.instructions.join("\u0000")}`}
-                clusterId={persona.cluster_id}
-                instructions={persona.instructions}
-              />
-            </div>
+
+            <section className="border-t pt-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className={LABEL}>Source papers</span>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    Search Semantic Scholar and attach the papers this
+                    perspective should reason from.
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] text-muted-foreground">
+                  {persona.references.length} attached
+                </span>
+              </div>
+
+              <form onSubmit={submitSearch} className="mt-3 flex gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={paperQuery}
+                    onChange={(event) => setPaperQuery(event.target.value)}
+                    placeholder="Search by topic, title, or author"
+                    className="pl-9"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  disabled={paperQuery.trim().length < 2 || searchPapers.isPending}
+                >
+                  {searchPapers.isPending ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    <Search />
+                  )}
+                  Search
+                </Button>
+              </form>
+
+              {selectedPapers.length > 0 && (
+                <div className="mt-4">
+                  <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Attached literature
+                  </p>
+                  <div className="space-y-2">
+                    {selectedPapers.map((paper) => (
+                      <PaperChoice
+                        key={`selected-${paper.id}`}
+                        paper={paper}
+                        selected
+                        onToggle={() => togglePaper(paper)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {searchPapers.data && (
+                <div className="mt-4">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Search results
+                    </p>
+                    <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      {searchPapers.isLoadingMore && (
+                        <LoaderCircle className="size-3 animate-spin" />
+                      )}
+                      {searchPapers.isLoadingMore
+                        ? `${searchResultCount} of ${PAPER_SEARCH_MAX_RESULTS} loaded`
+                        : `${searchResultCount} result${searchResultCount === 1 ? "" : "s"}`}
+                    </span>
+                  </div>
+                  {pageResults.length > 0 ? (
+                    <div className="space-y-2">
+                      {pageResults.map((paper) => (
+                        <PaperChoice
+                          key={`result-${paper.id}`}
+                          paper={paper}
+                          selected={selectedIds.has(paper.id)}
+                          onToggle={() => togglePaper(paper)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-lg border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
+                      No papers matched this search.
+                    </p>
+                  )}
+
+                  {searchResultCount > 0 && (
+                    <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3">
+                      <span className="text-[10px] text-muted-foreground">
+                        Page {paperPage} of 5
+                      </span>
+                      <div
+                        className="flex items-center gap-1"
+                        aria-label="Paper result pages"
+                      >
+                        {Array.from({ length: 5 }, (_, index) => {
+                          const page = index + 1
+                          const loaded =
+                            index * PAPER_SEARCH_PAGE_SIZE < searchResultCount
+                          const active = page === paperPage
+                          return (
+                            <button
+                              key={page}
+                              type="button"
+                              disabled={!loaded}
+                              onClick={() => setPaperPage(page)}
+                              aria-label={`Show paper results page ${page}`}
+                              aria-current={active ? "page" : undefined}
+                              className={cn(
+                                "flex size-7 items-center justify-center rounded-md border text-[10px] transition-colors",
+                                active
+                                  ? "border-foreground bg-foreground text-background"
+                                  : "bg-background text-muted-foreground hover:text-foreground",
+                                !loaded && "cursor-wait opacity-35",
+                              )}
+                            >
+                              {page}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {searchPapers.error && (
+                <p className="mt-3 text-xs text-destructive">
+                  Could not search Semantic Scholar. Try again in a moment.
+                </p>
+              )}
+            </section>
+
+            {!isManual && (
+              <div className="border-t pt-5">
+                <InstructionsEditor
+                  key={`instructions-${persona.cluster_id}-${persona.instructions.join("\u0000")}`}
+                  clusterId={persona.cluster_id}
+                  instructions={persona.instructions}
+                />
+              </div>
+            )}
           </div>
         </div>
-        <div className="shrink-0 border-t px-5 py-3 text-right">
-          <Button onClick={onClose}>Done</Button>
+        <div className="flex shrink-0 items-center border-t px-5 py-3">
+          {isManual && !isNew && (
+            <Button
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              onClick={onRemove}
+            >
+              Remove perspective
+            </Button>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="ghost" onClick={onCancel}>
+              {isNew ? "Cancel" : "Close"}
+            </Button>
+            <Button onClick={onDone} disabled={!complete}>
+              {isNew ? "Add perspective" : "Done"}
+            </Button>
+          </div>
         </div>
       </aside>
+    </div>
+  )
+}
+
+function PaperChoice({
+  paper,
+  selected,
+  onToggle,
+}: {
+  paper: Paper
+  selected: boolean
+  onToggle: () => void
+}) {
+  const authors = paper.authors
+    .slice(0, 2)
+    .map((author) => author.name)
+    .join(", ")
+  const meta = [authors, paper.year, paper.venue].filter(Boolean).join(" · ")
+
+  return (
+    <div
+      className={cn(
+        "group rounded-lg border px-3 py-3 transition-colors",
+        selected ? "border-primary/40 bg-primary/[0.035]" : "hover:bg-muted/25",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border",
+            selected
+              ? "border-primary bg-primary text-primary-foreground"
+              : "bg-background text-muted-foreground",
+          )}
+        >
+          {selected ? <Check className="size-3.5" /> : <BookOpen className="size-3.5" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 text-xs font-medium leading-snug">
+            {paper.title}
+          </p>
+          {meta && (
+            <p className="mt-1 truncate text-[10px] text-muted-foreground">
+              {meta}
+            </p>
+          )}
+          {paper.tldr && (
+            <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+              {paper.tldr}
+            </p>
+          )}
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onToggle}
+              className="text-[10px] font-medium text-primary hover:underline"
+            >
+              {selected ? "Remove" : "Attach paper"}
+            </button>
+            {paper.url && (
+              <a
+                href={paper.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+              >
+                View paper
+                <ExternalLink className="size-2.5" />
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

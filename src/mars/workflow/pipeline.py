@@ -31,6 +31,7 @@ from mars.schemas.event import (
     StepNode,
     StepStatus,
 )
+from mars.schemas.query import ExtractedQuery
 from mars.workflow.base import BaseNode, WorkflowContext
 from mars.workflow.cluster import ClusterNode
 from mars.workflow.debate import DebateNode, DebateNodeConfig
@@ -217,6 +218,16 @@ class Pipeline:
             condition=condition,
             test_mode=test_mode,
         )
+        if condition == "baseline":
+            self._contexts[query_id].extracted = ExtractedQuery(
+                raw_text=text,
+                spans=[],
+                claim=text,
+            )
+            for stage, stage_node in stages.items():
+                if stage != StageName.DEBATE:
+                    stage_node.status = StageStatus.SKIPPED
+                    stage_node.completed_at = now
         self._subscribers.setdefault(query_id, set())
         return self._states[query_id]
 
