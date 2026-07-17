@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import {
-  ArrowRight,
   BookOpen,
   Check,
   ChevronDown,
@@ -18,7 +17,7 @@ import {
   RotateCcw,
   Search,
   Send,
-  Sparkles,
+  UsersRound,
   X,
 } from "lucide-react"
 
@@ -54,16 +53,12 @@ import { TextShimmer } from "@/components/ui/text-shimmer"
 import { InstructionsEditor } from "@/features/agent-builder/context-panel/instructions-editor"
 import { useBaselineChat, useSendBaselineMessage } from "@/hooks/use-baseline-chat"
 import { useBaselineExport } from "@/hooks/use-baseline-export"
-import { useCreateBaseline } from "@/hooks/use-create-baseline"
 import { useDebate } from "@/hooks/use-debate"
 import { useHypotheses } from "@/hooks/use-hypotheses"
-import { usePapers } from "@/hooks/use-papers"
 import {
-  PAPER_SEARCH_MAX_RESULTS,
   PAPER_SEARCH_PAGE_SIZE,
   usePaperSearch,
 } from "@/hooks/use-paper-search"
-import { usePersonas } from "@/hooks/use-personas"
 import { useQueryEvents } from "@/hooks/use-query-events"
 import { useRunDebate } from "@/hooks/use-run-debate"
 import { cn } from "@/lib/utils"
@@ -77,7 +72,6 @@ import { humanizeEnum } from "@/utils/format"
 
 const LABEL =
   "text-[11px] font-medium uppercase tracking-normal text-muted-foreground"
-const STAGES = ["extract", "retrieve", "cluster", "persona"] as const
 
 function createManualPersona(clusterId: number): PersonaAgent {
   return {
@@ -98,107 +92,6 @@ function createManualPersona(clusterId: number): PersonaAgent {
       "State uncertainty and important limitations.",
     ],
     constraints: null,
-  }
-}
-
-const SETUP_ACTIVITIES: Record<
-  string,
-  { label: string; detail: string }
-> = {
-  "query.extract_spans": {
-    label: "Identifying the research constructs",
-    detail: "Separating the domain, intended outcome, key concepts, and proposed relationship.",
-  },
-  "query.synthesize_claim": {
-    label: "Forming a testable focal claim",
-    detail: "Restating the research question as one relationship the team can examine and challenge.",
-  },
-  "query.expand_query": {
-    label: "Expanding the research terminology",
-    detail: "Finding related terms and measures that may appear in adjacent literature.",
-  },
-  "query.generate_questions": {
-    label: "Drafting literature-search questions",
-    detail: "Creating evidence-oriented queries that resemble relevant paper titles and abstracts.",
-  },
-  "retrieval.build_anchors": {
-    label: "Building semantic search anchors",
-    detail: "Combining the focal claim and expanded concepts into literature-search targets.",
-  },
-  "retrieval.generate_search_variants": {
-    label: "Generating search variants",
-    detail: "Rephrasing the research problem to cover different terminology used across fields.",
-  },
-  "retrieval.retrieve_candidates": {
-    label: "Searching for relevant research",
-    detail: "Running semantic snippet searches, hydrating paper records, and removing duplicates.",
-  },
-  "retrieval.expand_corpus": {
-    label: "Expanding the evidence set",
-    detail: "Using highly cited seed papers to retrieve related recommendations beyond the initial results.",
-  },
-  "cluster.embed_papers": {
-    label: "Representing papers by topic",
-    detail: "Preparing the retrieved literature for perspective discovery.",
-  },
-  "cluster.cluster_papers": {
-    label: "Mapping research perspectives",
-    detail: "Grouping papers by similarity in their scientific embedding representations.",
-  },
-  "cluster.select_perspectives": {
-    label: "Selecting distinct perspectives",
-    detail: "Selecting cluster centroids that are separated in embedding space.",
-  },
-  "persona.synthesize_personas": {
-    label: "Drafting researcher profiles",
-    detail: "Turning each evidence cluster into a grounded framing, reasoning style, and evaluation lens.",
-  },
-  "persona.select_panel": {
-    label: "Finalizing the research team",
-    detail: "Preparing the generated researcher profiles for manual selection.",
-  },
-}
-
-const SETUP_STEP_ORDER: Record<(typeof STAGES)[number], string[]> = {
-  extract: [
-    "query.extract_spans",
-    "query.synthesize_claim",
-    "query.expand_query",
-    "query.generate_questions",
-  ],
-  retrieve: [
-    "retrieval.build_anchors",
-    "retrieval.generate_search_variants",
-    "retrieval.retrieve_candidates",
-    "retrieval.expand_corpus",
-  ],
-  cluster: [
-    "cluster.embed_papers",
-    "cluster.cluster_papers",
-    "cluster.select_perspectives",
-  ],
-  persona: ["persona.synthesize_personas", "persona.select_panel"],
-}
-
-function getSetupActivity(
-  stage: (typeof STAGES)[number],
-  steps: Record<string, string | undefined>,
-) {
-  const configured = SETUP_STEP_ORDER[stage]
-  const available = configured.filter((step) => steps[step] != null)
-  const ordered = available.length > 0 ? available : configured
-  let index = ordered.findIndex((step) => steps[step] === "running")
-  if (index === -1) {
-    index = ordered.findIndex(
-      (step) => steps[step] === "pending" || steps[step] == null,
-    )
-  }
-  if (index === -1) index = ordered.length - 1
-  const step = ordered[index]
-  return {
-    ...SETUP_ACTIVITIES[step],
-    index: index + 1,
-    total: ordered.length,
   }
 }
 
@@ -298,9 +191,11 @@ function useBaselineReset() {
   const clearBuilder = useAgentBuilderStore(
     (state) => state.researchProblemCleared,
   )
+  const conditionSet = useAgentBuilderStore((state) => state.studyConditionSet)
   return () => {
     resetBaseline()
     clearBuilder()
+    conditionSet("baseline")
     queryClient.clear()
   }
 }
@@ -321,6 +216,25 @@ function AppHeader({
         <span className="shrink-0 text-l font-semibold tracking-tight">
           MARS
         </span>
+        <HoverCard openDelay={80} closeDelay={80}>
+          <HoverCardTrigger asChild>
+            <button
+              type="button"
+              aria-label="About the MARS baseline"
+              className="rounded-full text-muted-foreground/55 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              <Info className="size-3.5" />
+            </button>
+          </HoverCardTrigger>
+          <HoverCardContent align="start" className="w-80">
+            <p className="text-s font-medium">Manual research baseline</p>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              Write a research question, build two to four perspectives, and
+              attach papers from Semantic Scholar. Nothing is submitted until
+              you generate hypotheses.
+            </p>
+          </HoverCardContent>
+        </HoverCard>
       </div>
       {testMode && (
         <span className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 items-center rounded-full border border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary sm:inline-flex">
@@ -338,385 +252,34 @@ export function BaselineWorkspace() {
   const queryId = useAgentBuilderStore((state) => state.queryId)
   const condition = useAgentBuilderStore((state) => state.studyCondition)
   const isBaseline = condition === "baseline"
+  const clearBuilder = useAgentBuilderStore(
+    (state) => state.researchProblemCleared,
+  )
+  const conditionSet = useAgentBuilderStore((state) => state.studyConditionSet)
+  const resetBaseline = useBaselineStore((state) => state.reset)
+
+  useEffect(() => {
+    if (isBaseline) return
+    clearBuilder()
+    resetBaseline()
+    conditionSet("baseline")
+  }, [clearBuilder, conditionSet, isBaseline, resetBaseline])
 
   useQueryEvents(isBaseline ? queryId : null)
-  usePersonas()
-  usePapers()
-  useDebate()
-  useHypotheses()
-  useBaselineChat()
 
-  if (queryId && isBaseline) return <DiscussionWorkspace />
-  return <LandingScreen />
-}
-
-const STAGE_LABELS: Record<(typeof STAGES)[number], string> = {
-  extract: "Analyze research problem",
-  retrieve: "Retrieve relevant literature",
-  cluster: "Map research perspectives",
-  persona: "Generate researcher profiles",
-}
-
-function LandingScreen() {
-  const queryId = useAgentBuilderStore((state) => state.queryId)
-  const condition = useAgentBuilderStore((state) => state.studyCondition)
-  const committed = useAgentBuilderStore((state) => state.committed)
-  const stages = useAgentBuilderStore((state) => state.pipelineStages)
-  const pipelineSteps = useAgentBuilderStore((state) => state.pipelineSteps)
-  const errors = useAgentBuilderStore((state) => state.stageErrors)
-  const testMode = useBaselineStore((state) => state.testMode)
-  const reset = useBaselineReset()
-
-  const [problem, setProblem] = useState("")
-  const create = useCreateBaseline()
-  const canSubmit = problem.trim().length > 0 && !create.isPending
-  const submit = (test = false) => {
-    if (canSubmit) create.mutate({ text: problem.trim(), testMode: test })
-  }
-
-  const building = !!queryId && condition === "baseline"
-
-  return (
-    <main className="relative flex min-h-dvh flex-col overflow-hidden bg-background">
-      <header className="relative z-10 flex shrink-0 items-center justify-center px-6 py-3.5">
-        {building && testMode && (
-          <span className="pointer-events-none absolute left-6 top-1/2 hidden -translate-y-1/2 items-center rounded-full border border-primary/25 bg-primary/5 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary sm:inline-flex">
-            Test mode
-          </span>
-        )}
-        <div className="flex items-center gap-1.5">
-          <span className="text-l font-semibold tracking-tight">MARS</span>
-          <HoverCard openDelay={80} closeDelay={80}>
-            <HoverCardTrigger asChild>
-              <button
-                type="button"
-                aria-label="About MARS"
-                className="rounded-full text-muted-foreground/50 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-              >
-                <Info className="size-3.5" />
-              </button>
-            </HoverCardTrigger>
-            <HoverCardContent align="center" className="w-96">
-              <p className="text-s leading-relaxed">
-                <span className="font-medium">MARS</span>
-                <span className="text-muted-foreground">
-                  {" "}
-                  (short for Multi-Agent Research System) turns a research
-                  question into a panel of evidence-grounded researchers, then
-                  has them debate it to reach a working hypothesis you can
-                  interrogate.
-                </span>
-              </p>
-              <ol className="mt-3 space-y-1.5 text-xs leading-relaxed text-muted-foreground">
-                <li>
-                  <span className="font-medium text-foreground">
-                    Retrieve
-                  </span>{" "}
-                  — searches the literature for work relevant to your question.
-                </li>
-                <li>
-                  <span className="font-medium text-foreground">Cluster</span> —
-                  groups those papers into distinct research perspectives.
-                </li>
-                <li>
-                  <span className="font-medium text-foreground">Assemble</span>{" "}
-                  — builds a researcher grounded in each perspective.
-                </li>
-                <li>
-                  <span className="font-medium text-foreground">Debate</span> —
-                  they propose, challenge, and check claims against the evidence
-                  to produce and refine the hypothesis.
-                </li>
-              </ol>
-            </HoverCardContent>
-          </HoverCard>
-        </div>
-        <button
-          type="button"
-          onClick={reset}
-          className={cn(
-            "absolute right-6 top-1/2 -translate-y-1/2 text-xs text-muted-foreground transition-opacity duration-500 hover:text-foreground",
-            building ? "opacity-100" : "pointer-events-none opacity-0",
-          )}
-        >
-          Start over
-        </button>
-      </header>
-
-      <section className="relative z-10 flex flex-1 justify-center overflow-y-auto px-5 pb-24 pt-[16vh]">
-        <div className="w-full max-w-2xl">
-          {!building ? (
-            <div>
-            <h1 className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
-              What question should the research team examine?
-            </h1>
-
-            <div className="relative mt-8 rounded-xl border bg-card p-2 shadow-sm transition-shadow focus-within:border-ring focus-within:shadow-md">
-              <Textarea
-                autoFocus
-                value={problem}
-                onChange={(event) => setProblem(event.target.value)}
-                onKeyDown={(event) => {
-                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                    event.preventDefault()
-                    submit(false)
-                  }
-                }}
-                placeholder="Describe a research problem, question, or early hypothesis..."
-                className="min-h-36 resize-none border-0 bg-transparent px-4 py-3 pr-16 text-m shadow-none focus-visible:ring-0 md:text-m"
-              />
-              <Button
-                variant="shine"
-                size="icon"
-                onClick={() => submit(false)}
-                disabled={!canSubmit}
-                aria-label="Build research team"
-                className="absolute bottom-3 right-3"
-              >
-                <ArrowRight />
-              </Button>
-            </div>
-            <div className="mt-3 flex items-center justify-center">
-              <button
-                type="button"
-                onClick={() => submit(true)}
-                disabled={!canSubmit}
-                className="text-xs text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-              >
-                {create.isPending && create.variables?.testMode
-                  ? "Starting preview…"
-                  : "Preview without running models"}
-              </button>
-            </div>
-            {create.error && (
-              <p className="mt-3 text-center text-s text-destructive">
-                Could not start the session. Check that the MARS backend is
-                running and try again.
-              </p>
-            )}
-            </div>
-          ) : (
-            <div>
-            <h1 className="text-3xl font-semibold leading-[1.15] tracking-tight sm:text-4xl">
-              {committed || " "}
-            </h1>
-            <div className="mt-8">
-              <PipelineProgress
-                stages={stages}
-                pipelineSteps={pipelineSteps}
-                errors={errors}
-              />
-            </div>
-          </div>
-          )}
-        </div>
-      </section>
-    </main>
-  )
-}
-
-function getSetupSubSteps(
-  stage: (typeof STAGES)[number],
-  steps: Record<string, string | undefined>,
-  complete = false,
-) {
-  const configured = SETUP_STEP_ORDER[stage]
-  // A finished stage shows every phase as a completed check, none active.
-  if (complete) {
-    return configured.map((step) => ({
-      step,
-      label: SETUP_ACTIVITIES[step].label,
-      detail: SETUP_ACTIVITIES[step].detail,
-      active: false,
-    }))
-  }
-  const available = configured.filter((step) => steps[step] != null)
-  const ordered = available.length > 0 ? available : configured
-  let activeIndex = ordered.findIndex((step) => steps[step] === "running")
-  if (activeIndex === -1) {
-    activeIndex = ordered.findIndex(
-      (step) => steps[step] === "pending" || steps[step] == null,
-    )
-  }
-  if (activeIndex === -1) activeIndex = ordered.length - 1
-  // Reveal only the phases reached so far — completed ones plus the active one.
-  return ordered.slice(0, activeIndex + 1).map((step, index) => ({
-    step,
-    label: SETUP_ACTIVITIES[step].label,
-    detail: SETUP_ACTIVITIES[step].detail,
-    active: index === activeIndex,
-  }))
-}
-
-function PipelineProgress({
-  stages,
-  pipelineSteps,
-  errors,
-}: {
-  stages: Record<string, string | undefined>
-  pipelineSteps: Record<string, string | undefined>
-  errors: Record<string, string | undefined>
-}) {
-  const failed = STAGES.find((stage) => stages[stage] === "failed")
-
-  return (
-    <div>
-      <div className="overflow-hidden rounded-lg border bg-card">
-        {STAGES.map((stage, index) => {
-          const status = stages[stage] ?? "pending"
-          const isRunning = status === "running"
-          const isComplete = status === "complete"
-          const hasDropdown = isRunning || isComplete
-          const activity = isRunning
-            ? getSetupActivity(stage, pipelineSteps)
-            : null
-          const subSteps = hasDropdown
-            ? getSetupSubSteps(stage, pipelineSteps, isComplete)
-            : []
-
-          const circle = (
-            <div
-              className={cn(
-                "flex size-5 shrink-0 items-center justify-center rounded-full border text-[9px] font-medium",
-                isComplete && "border-primary bg-primary text-primary-foreground",
-                isRunning && "border-primary text-primary",
-                status === "failed" && "border-destructive text-destructive",
-                status === "pending" && "text-muted-foreground",
-              )}
-            >
-              {isComplete ? <Check className="size-3" /> : index + 1}
-            </div>
-          )
-
-          const label = (
-            <span
-              className={cn(
-                "text-s font-medium",
-                status === "pending" && "text-muted-foreground",
-              )}
-            >
-              {STAGE_LABELS[stage]}
-            </span>
-          )
-
-          const caret = (
-            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-          )
-
-          return (
-            <div key={stage} className="border-b last:border-b-0">
-              {hasDropdown ? (
-                <Collapsible
-                  key={isRunning ? "running" : "done"}
-                  defaultOpen={isRunning}
-                >
-                  <CollapsibleTrigger className="group flex w-full items-center gap-3 px-4 py-3 text-left">
-                    {circle}
-                    {label}
-                    <div className="ml-auto flex items-center gap-2">
-                      {isRunning && (
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                          <TextShimmer>
-                            {activity
-                              ? `${activity.index}/${activity.total}`
-                              : "working"}
-                          </TextShimmer>
-                        </span>
-                      )}
-                      {caret}
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SubStepTimeline subSteps={subSteps} />
-                  </CollapsibleContent>
-                </Collapsible>
-              ) : (
-                <div className="flex items-center gap-3 px-4 py-3">
-                  {circle}
-                  {label}
-                  {status === "failed" && (
-                    <span className="ml-auto text-[10px] uppercase tracking-wide text-destructive">
-                      Failed
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-      {failed && (
-        <p className="mt-4 text-s text-destructive">
-          {errors[failed] ?? `The ${failed} stage failed.`}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function SubStepTimeline({
-  subSteps,
-}: {
-  subSteps: { step: string; label: string; detail: string; active: boolean }[]
-}) {
-  return (
-    <div
-      className="border-t bg-muted/20 py-3 pr-4 pl-[1.15rem]"
-      role="status"
-      aria-live="polite"
-    >
-      <ol className="relative">
-        {subSteps.map((subStep, index) => {
-          const isLast = index === subSteps.length - 1
-          return (
-            <li
-              key={subStep.step}
-              className="relative flex gap-3 pb-3 last:pb-0"
-            >
-              {!isLast && (
-                <span className="absolute bottom-0 left-[7.5px] top-4 w-px bg-border" />
-              )}
-              {subStep.active ? (
-                <span className="mt-px size-4 shrink-0 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
-              ) : (
-                <span className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-foreground/55">
-                  <Check className="size-2.5" />
-                </span>
-              )}
-              <div className="min-w-0 flex-1">
-                <p
-                  className={cn(
-                    "text-xs leading-tight",
-                    subStep.active
-                      ? "font-medium text-foreground"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {subStep.label}
-                </p>
-                {subStep.active && (
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {subStep.detail}
-                  </p>
-                )}
-              </div>
-            </li>
-          )
-        })}
-      </ol>
-    </div>
-  )
+  if (!isBaseline) return null
+  return <DiscussionWorkspace />
 }
 
 function DiscussionWorkspace() {
   const queryId = useAgentBuilderStore((state) => state.queryId)
-  const committed = useAgentBuilderStore((state) => state.committed)
-  const personas = useAgentBuilderStore((state) => state.personas)
-  const edits = useAgentBuilderStore((state) => state.personaEdits)
+  const question = useAgentBuilderStore((state) => state.draft)
+  const questionChanged = useAgentBuilderStore(
+    (state) => state.researchProblemDraftChanged,
+  )
   const { data: debate } = useDebate()
   const { data: synthesis } = useHypotheses()
   const { data: conversation } = useBaselineChat()
-  const { data: papers } = usePapers()
   const manualPersonas = useBaselineStore((state) => state.manualPersonas)
   const manualPapers = useBaselineStore((state) => state.manualPapers)
   const manualPersonaAdded = useBaselineStore(
@@ -728,9 +291,6 @@ function DiscussionWorkspace() {
   const manualPersonaRemoved = useBaselineStore(
     (state) => state.manualPersonaRemoved,
   )
-  const editGeneratedPersona = useAgentBuilderStore(
-    (state) => state.personaEdited,
-  )
   const exportSession = useBaselineExport()
   const testMode = useBaselineStore((state) => state.testMode)
   const reset = useBaselineReset()
@@ -738,39 +298,16 @@ function DiscussionWorkspace() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [newPerspectiveId, setNewPerspectiveId] = useState<number | null>(null)
 
-  const mergedPersonas = useMemo(
-    () => [
-      ...personas.map((persona) => ({
-        ...persona,
-        ...edits[persona.cluster_id],
-      })),
-      ...manualPersonas,
-    ],
-    [personas, edits, manualPersonas],
-  )
-  const allPapers = useMemo(
-    () => [
-      ...new Map(
-        [...(papers ?? []), ...manualPapers].map((paper) => [paper.id, paper]),
-      ).values(),
-    ],
-    [papers, manualPapers],
-  )
-
   const addPerspective = () => {
     const clusterId =
-      Math.max(999, ...mergedPersonas.map((persona) => persona.cluster_id)) + 1
+      Math.max(999, ...manualPersonas.map((persona) => persona.cluster_id)) + 1
     manualPersonaAdded(createManualPersona(clusterId))
     setNewPerspectiveId(clusterId)
     setEditingId(clusterId)
   }
 
   const editPersona = (clusterId: number, patch: Partial<PersonaAgent>) => {
-    if (manualPersonas.some((persona) => persona.cluster_id === clusterId)) {
-      manualPersonaEdited(clusterId, patch)
-      return
-    }
-    editGeneratedPersona(clusterId, patch)
+    manualPersonaEdited(clusterId, patch)
   }
 
   const closeEditor = (save = false) => {
@@ -860,40 +397,44 @@ function DiscussionWorkspace() {
             </Button>
           </div>
           <ResearcherSidebar
-            personas={mergedPersonas}
+            personas={manualPersonas}
             turns={debate?.cycle?.turns ?? []}
             evidence={debate?.cycle?.evidence ?? {}}
-            papers={allPapers}
+            papers={manualPapers}
             onEdit={setEditingId}
             onAdd={addPerspective}
           />
         </aside>
 
         <main className="flex min-w-0 flex-1 flex-col">
-          <div className="shrink-0 border-b px-4 py-3 sm:px-8">
+          <div className="shrink-0 border-b px-4 py-2.5 sm:px-8">
             <div className="mx-auto max-w-3xl">
-              <p className="text-s leading-relaxed font-medium whitespace-normal">
-                {committed}
-              </p>
+              <Textarea
+                value={question}
+                onChange={(event) => questionChanged(event.target.value)}
+                disabled={!!queryId}
+                aria-label="Research question"
+                placeholder="Enter the research question your team should examine…"
+                className="min-h-10 resize-none border-0 bg-transparent px-0 py-1 text-s font-medium leading-relaxed shadow-none focus-visible:border-0 focus-visible:ring-0 disabled:cursor-default disabled:opacity-100"
+              />
             </div>
           </div>
           <ConversationPanel
-            personas={mergedPersonas}
+            personas={manualPersonas}
             synthesis={synthesis}
             messages={conversation?.messages ?? []}
-            papers={allPapers}
+            papers={manualPapers}
+            question={question}
           />
         </main>
       </div>
 
       {editingId != null && (
         <PersonaEditor
-          persona={mergedPersonas.find((item) => item.cluster_id === editingId)}
-          papers={allPapers}
+          persona={manualPersonas.find((item) => item.cluster_id === editingId)}
+          papers={manualPapers}
           isNew={editingId === newPerspectiveId}
-          isManual={manualPersonas.some(
-            (persona) => persona.cluster_id === editingId,
-          )}
+          isManual
           onEdit={editPersona}
           onCancel={() => closeEditor(false)}
           onDone={() => closeEditor(true)}
@@ -983,13 +524,13 @@ function ResearcherSidebar({
         {personas.length === 0 ? (
           <div className="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed bg-background px-5 text-center">
             <div className="flex size-9 items-center justify-center rounded-full border bg-muted/25 text-muted-foreground">
-              <Plus className="size-4" />
+              <UsersRound className="size-4" />
             </div>
             <p className="mt-3 text-s font-medium">Build your research team</p>
             <p className="mt-1 max-w-52 text-xs leading-relaxed text-muted-foreground">
               Add each perspective manually, then ground it in papers you choose.
             </p>
-            <Button className="mt-4" size="sm" onClick={onAdd}>
+            <Button className="mt-4" variant="shine" onClick={onAdd}>
               <Plus />
               Add first perspective
             </Button>
@@ -1140,8 +681,10 @@ function ResearcherCard({
                 </TextShimmer>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
                   {evidenceCount > 0
-                    ? `Working from ${evidenceCount} retrieved evidence passage${evidenceCount === 1 ? "" : "s"}.`
-                    : "Locating evidence relevant to this perspective."}
+                    ? `Reviewing ${persona.references.length} attached paper${persona.references.length === 1 ? "" : "s"}; ${evidenceCount} relevant evidence passage${evidenceCount === 1 ? "" : "s"} selected.`
+                    : persona.references.length > 0
+                      ? `Searching ${persona.references.length} attached paper${persona.references.length === 1 ? "" : "s"} for the most relevant evidence.`
+                      : "Locating evidence relevant to this perspective."}
                 </p>
               </div>
             </div>
@@ -1254,11 +797,13 @@ function ConversationPanel({
   synthesis,
   messages,
   papers,
+  question,
 }: {
   personas: PersonaAgent[]
   synthesis: Synthesis | undefined
   messages: BaselineMessage[]
   papers: Paper[]
+  question: string
 }) {
   const activeIds = useBaselineStore((state) => state.activeAgentIds)
   const target = useBaselineStore((state) => state.target)
@@ -1275,7 +820,11 @@ function ConversationPanel({
 
   const active = personas.filter((persona) => activeIds.includes(persona.cluster_id))
   const canGenerate =
-    active.length >= 2 && active.length <= 4 && debateStage !== "running"
+    question.trim().length > 0 &&
+    active.length >= 2 &&
+    active.length <= 4 &&
+    debateStage !== "running" &&
+    !runDebate.isPending
   const byId = useMemo(
     () => new Map(personas.map((persona) => [String(persona.cluster_id), persona])),
     [personas],
@@ -1353,10 +902,16 @@ function ConversationPanel({
               <Button
                 variant="shine"
                 disabled={!canGenerate}
-                onClick={() => runDebate.mutate(active)}
+                onClick={() =>
+                  runDebate.mutate({
+                    personas: active,
+                    question: question.trim(),
+                  })
+                }
               >
-                <Sparkles />
-                Generate hypotheses
+                {runDebate.isPending
+                  ? "Starting discussion…"
+                  : "Generate hypotheses"}
               </Button>
               {(runDebate.error || debateError) && (
                 <p className="mt-3 text-xs text-destructive">
@@ -1657,6 +1212,7 @@ function PersonaEditor({
 }) {
   const [paperQuery, setPaperQuery] = useState("")
   const [paperPage, setPaperPage] = useState(1)
+  const paperSearchTopRef = useRef<HTMLFormElement | null>(null)
   const searchPapers = usePaperSearch()
   const manualPapersAdded = useBaselineStore(
     (state) => state.manualPapersAdded,
@@ -1670,12 +1226,17 @@ function PersonaEditor({
     pageStart,
     pageStart + PAPER_SEARCH_PAGE_SIZE,
   )
-  const pageResultIds = new Set(pageResults.map((paper) => paper.id))
+  const searchResultIds = new Set(
+    (searchPapers.data ?? []).map((paper) => paper.id),
+  )
   const selectedPapers = persona.references
     .map((id) => papers.find((paper) => paper.id === id))
     .filter(
-      (paper): paper is Paper => !!paper && !pageResultIds.has(paper.id),
+      (paper): paper is Paper => !!paper && !searchResultIds.has(paper.id),
     )
+  const allSearchResultsAttached =
+    searchResultIds.size > 0 &&
+    [...searchResultIds].every((id) => selectedIds.has(id))
   const complete =
     persona.name.trim().length > 0 &&
     persona.role.trim().length > 0 &&
@@ -1698,6 +1259,27 @@ function PersonaEditor({
     onEdit(persona.cluster_id, { references })
   }
 
+  const attachAllPapers = () => {
+    const results = searchPapers.data ?? []
+    if (results.length === 0 || allSearchResultsAttached) return
+    manualPapersAdded(results)
+    onEdit(persona.cluster_id, {
+      references: [
+        ...new Set([...persona.references, ...results.map((paper) => paper.id)]),
+      ],
+    })
+  }
+
+  const showPaperPage = (page: number) => {
+    setPaperPage(page)
+    requestAnimationFrame(() => {
+      paperSearchTopRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      })
+    })
+  }
+
   return (
     <div className="fixed inset-0 z-[60] flex justify-end bg-foreground/20 backdrop-blur-sm">
       <button
@@ -1714,21 +1296,10 @@ function PersonaEditor({
             className="size-9"
           />
           <div className="min-w-0 flex-1">
-            <span className={LABEL}>
-              {isNew ? "Build perspective" : "Edit perspective"}
-            </span>
             <p className="truncate text-s font-medium">
               {persona.name || "Untitled perspective"}
             </p>
           </div>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            onClick={onCancel}
-            aria-label="Close"
-          >
-            <X />
-          </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
           <div className="flex flex-col gap-5">
@@ -1784,7 +1355,11 @@ function PersonaEditor({
                 </span>
               </div>
 
-              <form onSubmit={submitSearch} className="mt-3 flex gap-2">
+              <form
+                ref={paperSearchTopRef}
+                onSubmit={submitSearch}
+                className="mt-3 flex scroll-mt-5 gap-2"
+              >
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -1832,14 +1407,21 @@ function PersonaEditor({
                     <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                       Search results
                     </p>
-                    <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                      {searchPapers.isLoadingMore && (
-                        <LoaderCircle className="size-3 animate-spin" />
-                      )}
-                      {searchPapers.isLoadingMore
-                        ? `${searchResultCount} of ${PAPER_SEARCH_MAX_RESULTS} loaded`
-                        : `${searchResultCount} result${searchResultCount === 1 ? "" : "s"}`}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">
+                        {searchResultCount} result
+                        {searchResultCount === 1 ? "" : "s"}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        disabled={allSearchResultsAttached}
+                        onClick={attachAllPapers}
+                      >
+                        {allSearchResultsAttached ? "All attached" : "Attach all"}
+                      </Button>
+                    </div>
                   </div>
                   {pageResults.length > 0 ? (
                     <div className="space-y-2">
@@ -1877,7 +1459,7 @@ function PersonaEditor({
                               key={page}
                               type="button"
                               disabled={!loaded}
-                              onClick={() => setPaperPage(page)}
+                              onClick={() => showPaperPage(page)}
                               aria-label={`Show paper results page ${page}`}
                               aria-current={active ? "page" : undefined}
                               className={cn(
@@ -1919,15 +1501,14 @@ function PersonaEditor({
         <div className="flex shrink-0 items-center border-t px-5 py-3">
           {isManual && !isNew && (
             <Button
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
+              variant="destructive"
               onClick={onRemove}
             >
               Remove perspective
             </Button>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" onClick={onCancel}>
+            <Button variant="outline" onClick={onCancel}>
               {isNew ? "Cancel" : "Close"}
             </Button>
             <Button onClick={onDone} disabled={!complete}>

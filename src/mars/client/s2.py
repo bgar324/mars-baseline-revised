@@ -214,10 +214,9 @@ class SemanticScholarClient(BaseClient):
                 if response.status_code == 429 or response.status_code >= 500:
                     if attempt == _MAX_RETRIES - 1:
                         if response.status_code == 429:
-                            logger.warning(
-                                "429 from %s after retries; returning empty", path
+                            raise SemanticScholarError(
+                                f"429 from {path} after retries"
                             )
-                            return None
                         raise SemanticScholarError(
                             f"{response.status_code} from {path} after retries"
                         )

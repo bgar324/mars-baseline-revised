@@ -2,6 +2,7 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 from mars.api.router import create_query as create_query_endpoint
+from mars.api.router import search_papers as search_papers_endpoint
 from mars.llm.providers.base import (
     LLMProvider,
     LLMResponse,
@@ -178,6 +179,26 @@ def test_baseline_query_starts_without_automatic_pipeline() -> None:
     assert ctx.papers == []
     assert ctx.personas == []
     assert state.stages[StageName.RETRIEVE].status == "skipped"
+
+
+def test_paper_search_does_not_require_a_research_session() -> None:
+    paper = Paper(id="paper-1", title="A relevant paper")
+    s2 = AsyncMock()
+    s2.search.return_value = [paper]
+
+    result = asyncio.run(
+        search_papers_endpoint(
+            q="scientific evidence evaluation",
+            limit=50,
+            offset=0,
+            s2=s2,
+        )
+    )
+
+    assert result == [paper]
+    s2.search.assert_awaited_once_with(
+        "scientific evidence evaluation", limit=50, offset=0
+    )
 
 
 class FakeChatProvider(LLMProvider):

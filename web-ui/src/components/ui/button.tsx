@@ -9,19 +9,20 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        default:
+          "border border-primary/35 bg-linear-to-b from-primary/85 to-primary text-primary-foreground duration-150 ease-out will-change-transform hover:brightness-110 active:scale-[0.97] active:brightness-95 [box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.2),0_1px_3px_0_rgba(0,0,0,0.15)] dark:border-primary/20 dark:bg-linear-to-t dark:from-primary/75",
         shine:
-          "border border-primary/35 bg-linear-to-b from-primary/85 to-primary text-primary-foreground duration-150 ease-out will-change-transform hover:brightness-110 active:scale-[0.97] active:brightness-95 [box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.2),0_1px_3px_0_rgba(0,0,0,0.15)] dark:border-0 dark:bg-linear-to-t dark:from-primary/75",
+          "border border-primary/35 bg-linear-to-b from-primary/85 to-primary text-primary-foreground duration-150 ease-out will-change-transform hover:brightness-110 active:scale-[0.97] active:brightness-95 [box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.2),0_1px_3px_0_rgba(0,0,0,0.15)] dark:border-primary/20 dark:bg-linear-to-t dark:from-primary/75",
         destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+          "border border-destructive/35 bg-linear-to-b from-destructive/85 to-destructive text-white duration-150 ease-out will-change-transform hover:brightness-110 active:scale-[0.97] active:brightness-95 focus-visible:ring-destructive/20 [box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.2),0_1px_3px_0_rgba(0,0,0,0.15)] dark:border-destructive/20 dark:bg-linear-to-t dark:from-destructive/75 dark:focus-visible:ring-destructive/40",
         "destructive-shine":
-          "border border-destructive/35 bg-linear-to-b from-destructive/85 to-destructive text-white duration-150 ease-out will-change-transform hover:brightness-110 active:scale-[0.97] active:brightness-95 [box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.2),0_1px_3px_0_rgba(0,0,0,0.15)] dark:border-0 dark:bg-linear-to-t dark:from-destructive/75",
+          "border border-destructive/35 bg-linear-to-b from-destructive/85 to-destructive text-white duration-150 ease-out will-change-transform hover:brightness-110 active:scale-[0.97] active:brightness-95 [box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.2),0_1px_3px_0_rgba(0,0,0,0.15)] dark:border-destructive/20 dark:bg-linear-to-t dark:from-destructive/75",
         outline:
-          "border bg-background shadow-xs hover:bg-muted dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+          "border border-border/90 bg-linear-to-b from-background to-muted/55 text-foreground duration-150 ease-out will-change-transform hover:brightness-105 active:scale-[0.97] active:brightness-95 [box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.65),0_1px_3px_0_rgba(0,0,0,0.13)] dark:border-input dark:from-input/45 dark:to-input/80 dark:[box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.08),0_1px_3px_0_rgba(0,0,0,0.3)]",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "border border-border/80 bg-linear-to-b from-secondary/75 to-secondary text-secondary-foreground duration-150 ease-out will-change-transform hover:brightness-105 active:scale-[0.97] active:brightness-95 [box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.5),0_1px_3px_0_rgba(0,0,0,0.13)] dark:[box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.08),0_1px_3px_0_rgba(0,0,0,0.3)]",
         ghost:
-          "hover:bg-muted dark:hover:bg-muted/50",
+          "hover:bg-muted active:scale-[0.94] dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

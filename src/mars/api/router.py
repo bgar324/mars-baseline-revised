@@ -182,6 +182,31 @@ async def save_and_export_query(
     return payload
 
 
+async def _search_semantic_scholar(
+    q: str,
+    limit: int,
+    offset: int,
+    s2: SemanticScholarClient,
+) -> list[Paper]:
+    try:
+        return await s2.search(q, limit=limit, offset=offset)
+    except SemanticScholarError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Semantic Scholar search is temporarily unavailable.",
+        ) from exc
+
+
+@query_router.get("/paper-search")
+async def search_papers(
+    q: str = Query(min_length=2, max_length=300),
+    limit: int = Query(default=10, ge=1, le=50),
+    offset: int = Query(default=0, ge=0, le=40),
+    s2: SemanticScholarClient = Depends(get_s2),
+) -> list[Paper]:
+    return await _search_semantic_scholar(q, limit, offset, s2)
+
+
 @query_router.get("/{query_id}")
 async def get_query(
     query_id: str, pipeline: Pipeline = Depends(get_pipeline)
@@ -220,22 +245,16 @@ async def get_papers(
 
 
 @query_router.get("/{query_id}/paper-search")
-async def search_papers(
+async def search_query_papers(
     query_id: str,
     q: str = Query(min_length=2, max_length=300),
-    limit: int = Query(default=10, ge=1, le=10),
+    limit: int = Query(default=10, ge=1, le=50),
     offset: int = Query(default=0, ge=0, le=40),
     pipeline: Pipeline = Depends(get_pipeline),
     s2: SemanticScholarClient = Depends(get_s2),
 ) -> list[Paper]:
     require_context(query_id, pipeline)
-    try:
-        return await s2.search(q, limit=limit, offset=offset)
-    except SemanticScholarError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Semantic Scholar search is temporarily unavailable.",
-        ) from exc
+    return await _search_semantic_scholar(q, limit, offset, s2)
 
 
 @query_router.get("/{query_id}/clusters")

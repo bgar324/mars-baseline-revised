@@ -50,6 +50,7 @@ type AgentBuilderActions = {
   ) => void
   researchProblemCleared: () => void
   modeSet: (mode: RunMode) => void
+  studyConditionSet: (condition: StudyCondition) => void
   focalClaimSet: (claim: string | null) => void
   pipelineStageSet: (
     stage: StageName,
@@ -114,6 +115,8 @@ export const useAgentBuilderStore = create<
       personasSet: (personas) => set({ personas }),
 
       modeSet: (mode) => set({ mode }),
+
+      studyConditionSet: (studyCondition) => set({ studyCondition }),
 
       focalClaimSet: (claim) => set({ focalClaim: claim }),
 
