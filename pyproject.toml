@@ -3,7 +3,7 @@ name = "mars"
 version = "0.1.0"
 description = "mars | multi-agent system for science"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "datasets>=5.0.0",
