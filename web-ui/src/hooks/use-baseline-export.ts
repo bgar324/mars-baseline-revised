@@ -38,7 +38,7 @@ export function useBaselineExport() {
           body: JSON.stringify({
             frontend_snapshot: {
               condition: "baseline",
-              route: "/baseline",
+              route: "/",
               startedAt: baseline.startedAt,
               testMode: baseline.testMode,
               exportedAt: new Date().toISOString(),

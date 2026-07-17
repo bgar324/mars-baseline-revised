@@ -32,6 +32,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/mars"]
 
+[tool.vercel]
+entrypoint = "src.mars.app:app"
+
 [dependency-groups]
 dev = [
     "gepa>=0.1.1",

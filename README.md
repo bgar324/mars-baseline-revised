@@ -45,14 +45,11 @@ pnpm approve-builds --all
 pnpm install
 ```
 
-The frontend calls the backend at `http://localhost:8000` (override with `API_URL` in `web-ui/.env.local`). Open http://localhost:3000/canvas for MARS or http://localhost:3000/baseline for the linear study baseline.
+The frontend calls the backend at `http://localhost:8000` (override with `API_URL` in `web-ui/.env.local`). Open http://localhost:3000 for the linear study baseline.
 
 ## Recommended formative-study demo path
 
 1. Start the backend and frontend with the commands above.
-2. Open `http://localhost:3000/canvas`.
-3. Use manual mode with a short, broad research problem.
-4. Let extraction, retrieval, clustering, and persona generation complete.
-5. Inspect/edit personas, then select 2-3 researchers for debate.
-6. Open the debate node to show conversation and synthesis.
-7. Use the header **Export** button to download the session JSON.
+2. Open `http://localhost:3000`.
+3. Enter a research topic and start the discussion.
+4. Use the header **Export** button to download the session JSON.
