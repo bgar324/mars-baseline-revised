@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from loguru import logger
@@ -37,29 +38,79 @@ def _status(state: PipelineState) -> tuple[str, str | None]:
 
 
 class StudySessionRecorder:
+    """Persists study sessions and pipeline events to Supabase.
+
+    Writes are drained by a single background worker over one long-lived
+    Supabase client, so the hot pipeline path never blocks on a network
+    round-trip (or on spinning up a fresh client per call). Session upserts
+    are coalesced per ``query_id`` — only the freshest snapshot is written,
+    which drops the redundant full-corpus uploads the pipeline emits at every
+    stage boundary. Callers that need durability before returning (the export
+    and chat endpoints) pass ``wait=True`` and await the enqueued write.
+    """
+
     def __init__(self, settings: SupabaseSettings) -> None:
         self._settings = settings
         self.enabled = _configured(settings)
+        self._use_secret = settings.secret_key is not None
+        self._db: SupabaseClient | None = None
+        self._queue: asyncio.Queue[tuple[str, Any, asyncio.Future | None]] | None = None
+        self._worker: asyncio.Task | None = None
+        self._pending: dict[str, dict[str, Any]] = {}
         if not self.enabled:
             logger.warning(
                 "study persistence disabled; set SUPABASE_URL and "
                 "SUPABASE_SECRET_KEY or SUPABASE_PUBLISHABLE_KEY"
             )
 
-    async def _execute(self, table: str, op: str, payload: Any) -> None:
-        if not self.enabled:
-            return
+    async def _client(self) -> SupabaseClient:
+        if self._db is None:
+            db = SupabaseClient(self._settings, use_secret_key=self._use_secret)
+            await db.__aenter__()
+            self._db = db
+        return self._db
+
+    async def _write(self, table: str, op: str, payload: Any) -> None:
         try:
-            async with SupabaseClient(
-                self._settings, use_secret_key=self._settings.secret_key is not None
-            ) as db:
-                if table == "study_sessions" and op == "upsert":
-                    query = db.table(table).upsert(payload, on_conflict="query_id")
-                else:
-                    query = getattr(db.table(table), op)(payload)
-                await query.execute()
+            db = await self._client()
+            if table == "study_sessions" and op == "upsert":
+                query = db.table(table).upsert(payload, on_conflict="query_id")
+            else:
+                query = getattr(db.table(table), op)(payload)
+            await query.execute()
         except Exception as exc:
             logger.warning("study persistence failed on {}.{}: {}", table, op, exc)
+            # Drop the client so the next write reconnects rather than reusing
+            # a socket the server may already have closed.
+            db, self._db = self._db, None
+            if db is not None:
+                try:
+                    await db.__aexit__(None, None, None)
+                except Exception:
+                    pass
+
+    def _ensure_worker(self) -> asyncio.Queue:
+        if self._queue is None:
+            self._queue = asyncio.Queue()
+        if self._worker is None or self._worker.done():
+            self._worker = asyncio.create_task(self._worker_loop())
+        return self._queue
+
+    async def _worker_loop(self) -> None:
+        assert self._queue is not None
+        while True:
+            kind, arg, done = await self._queue.get()
+            try:
+                if kind == "event":
+                    await self._write("study_session_events", "insert", arg)
+                elif kind == "session":
+                    payload = self._pending.pop(arg, None)
+                    if payload is not None:
+                        await self._write("study_sessions", "upsert", payload)
+            finally:
+                if done is not None and not done.done():
+                    done.set_result(None)
+                self._queue.task_done()
 
     async def upsert_session(
         self,
@@ -69,7 +120,10 @@ class StudySessionRecorder:
         backend_snapshot: dict[str, Any],
         frontend_snapshot: dict[str, Any] | None = None,
         export_payload: dict[str, Any] | None = None,
+        wait: bool = False,
     ) -> None:
+        if not self.enabled:
+            return
         status, last_error = _status(state)
         payload: dict[str, Any] = {
             "query_id": state.query_id,
@@ -84,9 +138,19 @@ class StudySessionRecorder:
             payload["frontend_snapshot"] = frontend_snapshot
         if export_payload is not None:
             payload["export_payload"] = export_payload
-        await self._execute("study_sessions", "upsert", payload)
+
+        # Coalesce by query_id: later fields win, sticky fields (frontend /
+        # export payloads) survive plainer upserts that omit them.
+        self._pending.setdefault(state.query_id, {}).update(payload)
+        queue = self._ensure_worker()
+        done = asyncio.get_running_loop().create_future() if wait else None
+        queue.put_nowait(("session", state.query_id, done))
+        if done is not None:
+            await done
 
     async def record_event(self, event: PipelineEvent) -> None:
+        if not self.enabled:
+            return
         payload = {
             "query_id": event.query_id,
             "event_type": event.event.value,
@@ -95,4 +159,22 @@ class StudySessionRecorder:
             "payload": event.payload if event.payload is not None else {},
             "occurred_at": event.timestamp.isoformat(),
         }
-        await self._execute("study_session_events", "insert", payload)
+        queue = self._ensure_worker()
+        queue.put_nowait(("event", payload, None))
+
+    async def aclose(self) -> None:
+        if self._queue is not None:
+            await self._queue.join()
+        if self._worker is not None:
+            self._worker.cancel()
+            try:
+                await self._worker
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._worker = None
+        if self._db is not None:
+            try:
+                await self._db.__aexit__(None, None, None)
+            except Exception:
+                pass
+            self._db = None

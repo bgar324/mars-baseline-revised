@@ -95,7 +95,7 @@ async def synthesize_personas(
         if cache_name:
             await provider.delete_cache(cache_name)
 
-    return assign_pseudonyms(list(personas))
+    return dedupe_roles(assign_pseudonyms(list(personas)))
 
 
 async def synthesize_generic_personas(
@@ -116,7 +116,7 @@ async def synthesize_generic_personas(
         return Persona(cluster_id=index, name="", references=[], **draft.model_dump())
 
     personas = await asyncio.gather(*(one(i) for i in range(n)))
-    return assign_pseudonyms(list(personas))
+    return dedupe_roles(assign_pseudonyms(list(personas)))
 
 
 def assign_pseudonyms(personas: list[Persona]) -> list[Persona]:
@@ -124,6 +124,28 @@ def assign_pseudonyms(personas: list[Persona]) -> list[Persona]:
         base = PERSONA_PSEUDONYMS[index % len(PERSONA_PSEUDONYMS)]
         cycle = index // len(PERSONA_PSEUDONYMS)
         persona.name = base if cycle == 0 else f"{base} {cycle + 1}"
+    return personas
+
+
+def dedupe_roles(personas: list[Persona]) -> list[Persona]:
+    """Ensure every persona's ``role`` is unique.
+
+    Roles are generated per cluster in parallel, so two researchers can land on
+    the same label (e.g. two "HCI Researcher"s), which is confusing on the
+    cards. Collisions are resolved deterministically by cluster_id: the first
+    keeps the bare role and later ones get a numeric suffix. Matching is
+    case- and whitespace-insensitive.
+    """
+    used: set[str] = set()
+    for persona in sorted(personas, key=lambda item: item.cluster_id):
+        base = " ".join((persona.role or "").split()) or "Researcher"
+        role = base
+        suffix = 2
+        while role.casefold() in used:
+            role = f"{base} {suffix}"
+            suffix += 1
+        persona.role = role
+        used.add(role.casefold())
     return personas
 
 

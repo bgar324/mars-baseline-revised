@@ -232,6 +232,14 @@ type DebateActivity = (typeof DEBATE_ACTIVITIES)[number] & {
   total: number
 }
 
+// Per-agent copy for the live turn phase streamed via `agent.thinking`, so each
+// researcher card narrates what that specific researcher is doing right now.
+const LIVE_PHASE_LABEL: Record<string, string> = {
+  proposal: "Drafting an opening position",
+  rebuttal: "Responding to the other researchers",
+  refinement: "Refining the argument",
+}
+
 function getDebateActivity(
   steps: Record<string, string | undefined>,
 ): DebateActivity {
@@ -825,6 +833,7 @@ function ResearcherSidebar({
   const targetSet = useBaselineStore((state) => state.targetSet)
   const debateStage = useAgentBuilderStore((state) => state.pipelineStages.debate)
   const pipelineSteps = useAgentBuilderStore((state) => state.pipelineSteps)
+  const thinkingAgents = useAgentBuilderStore((state) => state.thinkingAgents)
   const locked = debateStage === "running" || debateStage === "complete"
   const activity = getDebateActivity(pipelineSteps)
 
@@ -878,6 +887,7 @@ function ResearcherSidebar({
                 active={active}
                 locked={locked}
                 loading={debateStage === "running" && active}
+                livePhase={thinkingAgents[String(persona.cluster_id)]}
                 proposal={proposal}
                 activity={activity}
                 evidenceCount={
@@ -905,6 +915,7 @@ function ResearcherCard({
   active,
   locked,
   loading,
+  livePhase,
   proposal,
   activity,
   evidenceCount,
@@ -916,6 +927,7 @@ function ResearcherCard({
   active: boolean
   locked: boolean
   loading: boolean
+  livePhase: string | undefined
   proposal: AgentTurn | undefined
   activity: DebateActivity
   evidenceCount: number
@@ -1000,7 +1012,8 @@ function ResearcherCard({
             <div className={cn(proposal && "mb-3 border-b pb-3")}>
               <div className="min-w-0">
                 <TextShimmer className="text-xs">
-                  {activity.cardLabel}
+                  {(livePhase && LIVE_PHASE_LABEL[livePhase]) ||
+                    activity.cardLabel}
                 </TextShimmer>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
                   {evidenceCount > 0

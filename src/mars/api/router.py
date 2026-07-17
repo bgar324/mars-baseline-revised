@@ -73,7 +73,7 @@ async def create_query(
     state = pipeline.create_query(
         request.query, request.mode, request.condition, request.test_mode
     )
-    await pipeline.persist_session(state.query_id)
+    await pipeline.persist_session(state.query_id, wait=True)
     if request.test_mode:
         _spawn(pipeline.run_demo_setup(state.query_id))
     elif request.mode == "manual":
@@ -106,7 +106,7 @@ async def run_debate(
             status_code=400,
             detail="Select no more than 4 researchers to debate.",
         )
-    await pipeline.persist_session(query_id)
+    await pipeline.persist_session(query_id, wait=True)
     if ctx.test_mode:
         _spawn(pipeline.run_demo_debate(query_id))
     else:
@@ -134,7 +134,7 @@ async def run_baseline_chat(
         conversation = await respond_to_researcher(ctx, request, llm)
     except BaselineChatError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    await pipeline.persist_session(query_id)
+    await pipeline.persist_session(query_id, wait=True)
     return conversation
 
 
@@ -147,7 +147,7 @@ async def export_query(
         payload = pipeline.export_session(query_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    await pipeline.persist_session(query_id, export_payload=payload)
+    await pipeline.persist_session(query_id, export_payload=payload, wait=True)
     return payload
 
 
@@ -167,6 +167,7 @@ async def save_and_export_query(
         query_id,
         frontend_snapshot=request.frontend_snapshot,
         export_payload=payload,
+        wait=True,
     )
     return payload
 
