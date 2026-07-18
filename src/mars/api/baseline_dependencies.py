@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 
 from mars.client.s2 import SemanticScholarClient
@@ -16,7 +17,10 @@ def get_baseline_gemini() -> GeminiProvider:
 
 @lru_cache(maxsize=1)
 def get_baseline_s2() -> SemanticScholarClient:
-    return SemanticScholarClient.from_env(SETTINGS.s2)
+    settings = SETTINGS.s2
+    if os.environ.get("VERCEL"):
+        settings = settings.model_copy(update={"cache_dir": "/tmp/mars-s2-cache"})
+    return SemanticScholarClient.from_env(settings)
 
 
 @lru_cache(maxsize=1)
