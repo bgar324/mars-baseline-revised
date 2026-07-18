@@ -1,4 +1,5 @@
 import asyncio
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 from mars.api.router import create_query as create_query_endpoint
@@ -243,6 +244,62 @@ def test_baseline_pipeline_only_builds_the_debate_stage() -> None:
 
     assert set(state.stages) == {StageName.DEBATE}
     assert state.stages[StageName.DEBATE].status == "pending"
+
+
+def test_pipeline_restores_exported_baseline_session() -> None:
+    pipeline = build_baseline(gemini=FakeChatProvider(), s2=AsyncMock())
+    state = pipeline.create_query(
+        "How should teams evaluate AI tools?",
+        mode="manual",
+        condition="baseline",
+        test_mode=True,
+    )
+    ctx = pipeline.get_context(state.query_id)
+    agent = persona(1)
+    paper = Paper(id="paper-1", title="Selected source", corpus_id=42)
+    cycle = Cycle(
+        focal_claim=ctx.raw_text,
+        problem=ctx.raw_text,
+        agent_ids=["1"],
+        status="complete",
+        synthesis=Synthesis(
+            meta_review=MetaReview(
+                problem="Evaluation quality remains uncertain.",
+                previous_work="Prior work reports mixed outcomes.",
+                reasoning="Verification may moderate the effect.",
+                hypothesis="Structured verification may preserve evaluation quality.",
+            )
+        ),
+    )
+    ctx.papers = [paper]
+    ctx.personas = [agent]
+    ctx.cycle = cycle
+    ctx.debate = Debate(focal_claim=ctx.raw_text, agents=[agent], cycle=cycle)
+    ctx.baseline_messages = [BaselineMessage(role="user", content="Why?")]
+
+    snapshot = pipeline.export_session(state.query_id)
+    restored = build_baseline(gemini=FakeChatProvider(), s2=AsyncMock())
+    restored_state = restored.restore_session(snapshot)
+    restored_ctx = restored.get_context(state.query_id)
+
+    assert restored_state == state
+    assert set(restored_state.stages) == {StageName.DEBATE}
+    assert restored_ctx.raw_text == ctx.raw_text
+    assert restored_ctx.test_mode is True
+    assert restored_ctx.papers == [paper]
+    assert restored_ctx.personas == [agent]
+    assert restored_ctx.debate is not None
+    assert restored_ctx.cycle is restored_ctx.debate.cycle
+    assert restored_ctx.cycle is not None
+    assert restored_ctx.cycle.synthesis is not None
+    assert restored_ctx.baseline_messages[0].content == "Why?"
+
+    ctx.baseline_messages.append(BaselineMessage(role="user", content="How?"))
+    state.updated_at += timedelta(seconds=1)
+    refreshed = restored.restore_session(pipeline.export_session(state.query_id))
+
+    assert refreshed.updated_at == state.updated_at
+    assert restored.get_context(state.query_id).baseline_messages[-1].content == "How?"
 
 
 def test_baseline_chat_persists_user_and_grounded_agent_messages() -> None:

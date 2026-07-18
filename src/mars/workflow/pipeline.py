@@ -21,6 +21,9 @@ from mars.logging.format import (
     format_token_usage,
     join_meta,
 )
+from mars.models.debate import BaselineMessage, Cycle, Debate
+from mars.models.persona import Persona
+from mars.models.s2 import Paper
 from mars.schemas.event import (
     STAGE_EVENT,
     EventType,
@@ -32,7 +35,12 @@ from mars.schemas.event import (
     StepNode,
     StepStatus,
 )
-from mars.schemas.query import ExtractedQuery
+from mars.schemas.query import (
+    ExtractedQuery,
+    HypotheticalQuestions,
+    QueryExpansion,
+    RetrievalAnchors,
+)
 from mars.workflow.base import BaseNode, WorkflowContext
 
 if TYPE_CHECKING:
@@ -372,6 +380,7 @@ class Pipeline:
             "test_mode": True,
         }
         self._touch(query_id)
+        await self.persist_session(query_id, wait=True)
         await self._emit(
             query_id,
             PipelineEvent(
@@ -382,7 +391,6 @@ class Pipeline:
                 timestamp=_now(),
             ),
         )
-        await self.persist_session(query_id)
         return state
 
     async def run_all(
@@ -424,6 +432,77 @@ class Pipeline:
     def get_context(self, query_id: str) -> WorkflowContext:
         self._require(query_id)
         return self._contexts[query_id]
+
+    def has_query(self, query_id: str) -> bool:
+        return query_id in self._states
+
+    def restore_session(self, snapshot: dict[str, Any]) -> PipelineState:
+        """Restore an exported session snapshot into this pipeline instance."""
+        state = PipelineState.model_validate(snapshot["state"])
+        query_id = state.query_id
+        snapshot_query_id = str(snapshot.get("query_id") or query_id)
+        if snapshot_query_id != query_id:
+            raise ValueError("session snapshot query ID does not match its state")
+        existing = self._states.get(query_id)
+        if existing is not None and existing.updated_at >= state.updated_at:
+            return existing
+
+        artifacts = snapshot.get("artifacts") or {}
+
+        def model(value: Any, model_type: Any) -> Any:
+            return model_type.model_validate(value) if value is not None else None
+
+        papers = [Paper.model_validate(item) for item in artifacts.get("papers") or []]
+        papers_by_id = {paper.id: paper for paper in papers}
+        cluster_ids = artifacts.get("clusters") or {}
+        clusters = {
+            int(cluster_id): [
+                papers_by_id[paper_id]
+                for paper_id in paper_ids
+                if paper_id in papers_by_id
+            ]
+            for cluster_id, paper_ids in cluster_ids.items()
+        }
+        debate = model(artifacts.get("debate"), Debate)
+        cycle = debate.cycle if debate is not None else None
+        if cycle is None:
+            cycle = model(artifacts.get("cycle"), Cycle)
+            if debate is not None:
+                debate.cycle = cycle
+
+        context = WorkflowContext(
+            query_id=query_id,
+            raw_text=str(snapshot.get("research_problem") or ""),
+            mode=str(snapshot.get("mode") or "auto"),
+            condition=str(snapshot.get("condition") or "mars"),
+            test_mode=bool(snapshot.get("test_mode", False)),
+            extracted=model(artifacts.get("extracted"), ExtractedQuery),
+            expansion=model(artifacts.get("expansion"), QueryExpansion),
+            questions=model(artifacts.get("questions"), HypotheticalQuestions),
+            anchors=model(artifacts.get("anchors"), RetrievalAnchors),
+            papers=papers,
+            retrieval_diagnostics=artifacts.get("retrieval_diagnostics") or [],
+            clusters=clusters,
+            perspectives=artifacts.get("perspectives") or [],
+            personas=[
+                Persona.model_validate(item) for item in artifacts.get("personas") or []
+            ],
+            persona_pool=[
+                Persona.model_validate(item)
+                for item in artifacts.get("persona_pool") or []
+            ]
+            or None,
+            debate=debate,
+            cycle=cycle,
+            baseline_messages=[
+                BaselineMessage.model_validate(item)
+                for item in artifacts.get("baseline_messages") or []
+            ],
+        )
+        self._states[query_id] = state
+        self._contexts[query_id] = context
+        self._subscribers.setdefault(query_id, set())
+        return state
 
     async def subscribe(self, query_id: str) -> AsyncIterator[PipelineEvent]:
         self._require(query_id)
@@ -602,6 +681,7 @@ class Pipeline:
                     f"error: {exc}",
                 ),
             )
+            await self.persist_session(query_id, wait=True)
             await self._emit(
                 query_id,
                 PipelineEvent(
@@ -612,7 +692,6 @@ class Pipeline:
                     timestamp=_now(),
                 ),
             )
-            await self.persist_session(query_id)
             return
 
         stage_node.duration_seconds = perf_counter() - started
@@ -621,6 +700,7 @@ class Pipeline:
         stage_node.completed_at = _now()
         stage_node.result = node.summarize(ctx)
         self._touch(query_id)
+        await self.persist_session(query_id, wait=True)
         await self._emit(
             query_id,
             PipelineEvent(
@@ -631,7 +711,6 @@ class Pipeline:
                 timestamp=_now(),
             ),
         )
-        await self.persist_session(query_id)
 
 
 class Preset(str, Enum):

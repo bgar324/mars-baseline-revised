@@ -6,9 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from mars.api.baseline_dependencies import (
     get_baseline_gemini,
-    get_baseline_pipeline,
     get_baseline_recorder,
     get_baseline_s2,
+    get_restored_baseline_pipeline,
 )
 from mars.api.dependencies import get_gemini, get_pipeline, get_s2
 from mars.api.router import query_router
@@ -34,6 +34,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.dependency_overrides[get_gemini] = get_baseline_gemini
-app.dependency_overrides[get_pipeline] = get_baseline_pipeline
+app.dependency_overrides[get_pipeline] = get_restored_baseline_pipeline
 app.dependency_overrides[get_s2] = get_baseline_s2
 app.include_router(query_router)

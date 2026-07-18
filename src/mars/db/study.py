@@ -89,6 +89,34 @@ class StudySessionRecorder:
                 except Exception:
                     pass
 
+    async def load_session(self, query_id: str) -> dict[str, Any] | None:
+        """Load the latest backend snapshot for a session, if persistence is on."""
+        if not self.enabled:
+            return None
+        try:
+            db = await self._client()
+            result = await (
+                db.table("study_sessions")
+                .select("backend_snapshot")
+                .eq("query_id", query_id)
+                .limit(1)
+                .execute()
+            )
+            rows = result.data or []
+            if not rows:
+                return None
+            snapshot = rows[0].get("backend_snapshot")
+            return snapshot if isinstance(snapshot, dict) else None
+        except Exception as exc:
+            logger.warning("study session restore failed for {}: {}", query_id, exc)
+            db, self._db = self._db, None
+            if db is not None:
+                try:
+                    await db.__aexit__(None, None, None)
+                except Exception:
+                    pass
+            return None
+
     def _ensure_worker(self) -> asyncio.Queue:
         if self._queue is None:
             self._queue = asyncio.Queue()

@@ -46,7 +46,10 @@ export function useQueryEvents(queryId: string | null): void {
     fetch(`/api/query/${queryId}`)
       .then(async (r) => {
         if (r.ok) return r.json()
-        if (r.status === 404) clearStaleQuery({ status: 404 })
+        if (r.status === 404) {
+          source.close()
+          clearStaleQuery({ status: 404 })
+        }
         return null
       })
       .then((json) => {
@@ -59,6 +62,12 @@ export function useQueryEvents(queryId: string | null): void {
             setStep(step, stepNode.status)
           }
           if (node.status === "complete") invalidate(stage as StageName)
+          if (
+            stage === "debate" &&
+            ["complete", "failed", "skipped"].includes(node.status)
+          ) {
+            source.close()
+          }
         }
       })
       .catch(() => {})

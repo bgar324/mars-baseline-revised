@@ -1,4 +1,5 @@
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import mars.db.study as study_mod
@@ -40,10 +41,31 @@ class _FakeTable:
     def insert(self, payload):
         return _FakeQuery(self._sink, self._name, "insert", payload)
 
+    def select(self, *_columns):
+        return _FakeSelectQuery()
+
+
+class _FakeSelectQuery:
+    def __init__(self) -> None:
+        self._query_id: str | None = None
+
+    def eq(self, _column: str, value: str):
+        self._query_id = value
+        return self
+
+    def limit(self, _count: int):
+        return self
+
+    async def execute(self):
+        snapshot = _FakeClient.snapshots.get(self._query_id or "")
+        rows = [{"backend_snapshot": snapshot}] if snapshot is not None else []
+        return SimpleNamespace(data=rows)
+
 
 class _FakeClient:
     instances = 0
     all_writes: list = []
+    snapshots: dict[str, dict] = {}
 
     def __init__(self, settings, *, use_secret_key=False) -> None:
         self.writes = type(self).all_writes
@@ -62,6 +84,7 @@ class _FakeClient:
     def reset(cls) -> None:
         cls.instances = 0
         cls.all_writes = []
+        cls.snapshots = {}
 
 
 def _settings() -> SupabaseSettings:
@@ -129,6 +152,23 @@ def test_non_blocking_upserts_coalesce_per_query(monkeypatch) -> None:
     upserts = [w for w in _FakeClient.all_writes if w[1] == "upsert"]
     assert len(upserts) < 5  # coalesced
     assert upserts[-1][2]["backend_snapshot"] == {"n": 4}  # freshest wins
+
+
+def test_load_session_returns_persisted_backend_snapshot(monkeypatch) -> None:
+    _FakeClient.reset()
+    _FakeClient.snapshots["query-1"] = {"query_id": "query-1", "state": {}}
+    monkeypatch.setattr(study_mod, "SupabaseClient", _FakeClient)
+    recorder = StudySessionRecorder(_settings())
+
+    async def go():
+        snapshot = await recorder.load_session("query-1")
+        missing = await recorder.load_session("missing")
+        await recorder.aclose()
+        return snapshot, missing
+
+    snapshot, missing = asyncio.run(go())
+    assert snapshot == {"query_id": "query-1", "state": {}}
+    assert missing is None
 
 
 # --------------------------------------------------------------------------

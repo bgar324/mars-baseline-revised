@@ -46,3 +46,12 @@ def get_baseline_pipeline() -> Pipeline:
         },
         recorder=get_baseline_recorder(),
     )
+
+
+async def get_restored_baseline_pipeline(query_id: str | None = None) -> Pipeline:
+    pipeline = get_baseline_pipeline()
+    if query_id:
+        snapshot = await get_baseline_recorder().load_session(query_id)
+        if snapshot is not None:
+            pipeline.restore_session(snapshot)
+    return pipeline
