@@ -138,3 +138,18 @@ class AppSettings(BaseSettings):
     s2: SemanticScholarSettings = Field(default_factory=SemanticScholarSettings)
     huggingface: HuggingFaceSettings = Field(default_factory=HuggingFaceSettings)
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
+
+
+class BaselineAppSettings(BaseSettings):
+    """Settings required by the manual baseline deployment."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    gemini: GeminiSettings = Field(default_factory=GeminiSettings)
+    supabase: SupabaseSettings = Field(default_factory=SupabaseSettings)
+    s2: SemanticScholarSettings = Field(default_factory=SemanticScholarSettings)
+    pipeline: PipelineConfig = Field(default_factory=PipelineConfig)

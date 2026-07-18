@@ -26,7 +26,7 @@ from mars.schemas.debate import BaselineChatRequest
 from mars.schemas.event import DebateRunRequest, QueryRequest, StageName
 from mars.workflow.baseline import respond_to_researcher
 from mars.workflow.base import BaseNode, BaseStep, WorkflowContext
-from mars.workflow.pipeline import Pipeline
+from mars.workflow.pipeline import Pipeline, build_baseline
 
 
 def persona(cluster_id: int) -> Persona:
@@ -227,6 +227,22 @@ class FakeChatProvider(LLMProvider):
 
     async def delete_cache(self, cache_name: str) -> None:
         raise NotImplementedError
+
+
+def test_baseline_pipeline_only_builds_the_debate_stage() -> None:
+    pipeline = build_baseline(
+        gemini=FakeChatProvider(),
+        s2=AsyncMock(),
+    )
+
+    state = pipeline.create_query(
+        "How should teams evaluate AI tools?",
+        mode="manual",
+        condition="baseline",
+    )
+
+    assert set(state.stages) == {StageName.DEBATE}
+    assert state.stages[StageName.DEBATE].status == "pending"
 
 
 def test_baseline_chat_persists_user_and_grounded_agent_messages() -> None:

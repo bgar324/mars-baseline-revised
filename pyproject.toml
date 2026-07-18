@@ -5,21 +5,28 @@ description = "mars | multi-agent system for science"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "beautifulsoup4>=4.14.3",
-    "datasets>=5.0.0",
-    "fastapi[standard]>=0.136.1",
+    "fastapi>=0.136.1",
     "google-genai>=1.0.0",
-    "hdbscan>=0.8.36",
     "httpx>=0.28.1",
-    "igraph>=1.0.0",
-    "langextract>=1.4.0",
-    "leidenalg>=0.12.0",
     "loguru>=0.7.2",
-    "lxml>=6.1.1",
-    "numpy>=1.26",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
     "supabase>=2.24.0",
+]
+
+[project.optional-dependencies]
+server = [
+    "uvicorn[standard]>=0.12.0",
+]
+full = [
+    "beautifulsoup4>=4.14.3",
+    "datasets>=5.0.0",
+    "hdbscan>=0.8.36",
+    "igraph>=1.0.0",
+    "langextract>=1.4.0",
+    "leidenalg>=0.12.0",
+    "lxml>=6.1.1",
+    "numpy>=1.26",
     "torch>=2.0.0",
     "transformers>=4.40.0",
     "umap-learn>=0.5.5",
@@ -33,10 +40,11 @@ build-backend = "hatchling.build"
 packages = ["src/mars"]
 
 [tool.vercel]
-entrypoint = "src.mars.app:app"
+entrypoint = "src.mars.baseline_app:app"
 
 [dependency-groups]
 dev = [
+    "fastapi[standard]>=0.136.1",
     "gepa>=0.1.1",
     "ipykernel>=7.2.0",
     "matplotlib>=3.8",

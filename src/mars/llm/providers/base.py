@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
 
-import numpy as np
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 T = TypeVar("T", bound=BaseModel)

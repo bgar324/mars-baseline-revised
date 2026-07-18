@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
@@ -19,7 +21,6 @@ from mars.logging.format import (
     format_token_usage,
     join_meta,
 )
-from mars.llm.providers.langextract import LangExtractProvider
 from mars.schemas.event import (
     STAGE_EVENT,
     EventType,
@@ -33,14 +34,13 @@ from mars.schemas.event import (
 )
 from mars.schemas.query import ExtractedQuery
 from mars.workflow.base import BaseNode, WorkflowContext
-from mars.workflow.cluster import ClusterNode
-from mars.workflow.debate import DebateNode, DebateNodeConfig
-from mars.workflow.persona import PersonaNode, PersonaNodeConfig
-from mars.workflow.query import QueryNode, QueryNodeConfig
-from mars.workflow.retrieval import RetrievalNode
 
 if TYPE_CHECKING:
     from mars.db.study import StudySessionRecorder
+    from mars.llm.providers.langextract import LangExtractProvider
+    from mars.workflow.debate import DebateNodeConfig
+    from mars.workflow.persona import PersonaNodeConfig
+    from mars.workflow.query import QueryNodeConfig
 
 
 class PipelineError(Exception): ...
@@ -642,6 +642,9 @@ class Preset(str, Enum):
 
 
 def preset_configs(preset: Preset):
+    from mars.workflow.debate import DebateNodeConfig
+    from mars.workflow.persona import PersonaNodeConfig
+
     persona = PersonaNodeConfig(grounded=preset is not Preset.GENERIC_PERSONAS)
     if preset is Preset.NO_DEBATE:
         debate = DebateNodeConfig(
@@ -670,6 +673,12 @@ def build(
     preset: Preset | None = None,
     recorder: "StudySessionRecorder | None" = None,
 ) -> Pipeline:
+    from mars.workflow.cluster import ClusterNode
+    from mars.workflow.debate import DebateNode
+    from mars.workflow.persona import PersonaNode
+    from mars.workflow.query import QueryNode
+    from mars.workflow.retrieval import RetrievalNode
+
     if preset is not None:
         q, r, c, p, d = preset_configs(preset)
         query_config = query_config or q
@@ -704,3 +713,26 @@ def build(
         node.validate()
 
     return Pipeline(nodes=nodes, recorder=recorder)
+
+
+def build_baseline(
+    *,
+    gemini: LLMProvider,
+    s2: SemanticScholarClient,
+    judge_llm: LLMProvider | None = None,
+    retrieval_filters: dict | None = None,
+    recorder: "StudySessionRecorder | None" = None,
+) -> Pipeline:
+    """Build the manual baseline without importing the ML research pipeline."""
+    from mars.workflow.debate import DebateNode
+
+    tracked_gemini = UsageTracker(gemini)
+    tracked_judge = UsageTracker(judge_llm) if judge_llm is not None else None
+    debate = DebateNode(
+        llm=tracked_gemini,
+        s2=s2,
+        judge_llm=tracked_judge,
+        retrieval_filters=retrieval_filters,
+    )
+    debate.validate()
+    return Pipeline(nodes=[debate], recorder=recorder)

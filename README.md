@@ -2,22 +2,30 @@
 
 ## Running locally
 
-Backend (FastAPI, port 8000):
+Baseline backend (FastAPI, port 8000):
 
 ```bash
-uv run fastapi dev src/mars/app.py
+uv run fastapi dev src/mars/baseline_app.py
 ```
 
 If `uv` is not available, create a local virtual environment:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install -e .
-.venv/bin/uvicorn mars.app:app --host 127.0.0.1 --port 8000
+.venv/bin/python -m pip install -e '.[server]'
+.venv/bin/uvicorn mars.baseline_app:app --host 127.0.0.1 --port 8000
 ```
 
-Requires `GEMINI_API_KEY`, `LANGEXTRACT_API_KEY`, and
-`SEMANTIC_SCHOLAR_API_KEY` in `.env`.
+Requires `GEMINI_API_KEY` and `SEMANTIC_SCHOLAR_API_KEY` in `.env`.
+
+The original full MARS research pipeline remains available as an optional
+local install:
+
+```bash
+uv run --extra full fastapi dev src/mars/app.py
+```
+
+The full pipeline additionally requires `LANGEXTRACT_API_KEY`.
 
 For formative-study persistence, also set:
 
