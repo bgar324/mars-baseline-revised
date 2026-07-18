@@ -92,14 +92,25 @@ class _ExternalFilter(logging.Filter):
         return not any(s in record.getMessage() for s in SUPPRESS_SUBSTRINGS)
 
 
-def configure_logging(*, level: str = "INFO", jsonl_path: str | None = None) -> None:
+def configure_logging(
+    *,
+    level: str = "INFO",
+    jsonl_path: str | None = None,
+    enqueue: bool = True,
+) -> None:
     logger.remove()
     logger.configure(extra={"source": "mars", "stage": "pipeline"})
     for name, color in LEVEL_COLORS.items():
         logger.level(name, color=color)
-    logger.add(sys.stderr, format=LOG_FORMAT, level=level, colorize=True, enqueue=True)
+    logger.add(
+        sys.stderr,
+        format=LOG_FORMAT,
+        level=level,
+        colorize=True,
+        enqueue=enqueue,
+    )
     if jsonl_path:
-        logger.add(jsonl_path, level="DEBUG", serialize=True, enqueue=True)
+        logger.add(jsonl_path, level="DEBUG", serialize=True, enqueue=enqueue)
     _intercept_stdlib(level)
     for name, lvl in NOISY_LOGGERS.items():
         logging.getLogger(name).setLevel(lvl)

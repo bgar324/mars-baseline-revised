@@ -14,7 +14,9 @@ from mars.api.dependencies import get_gemini, get_pipeline, get_s2
 from mars.api.router import query_router
 from mars.logging import configure_logging
 
-configure_logging()
+# Vercel functions do not expose the multiprocessing semaphore used by
+# Loguru's queued handlers.
+configure_logging(enqueue=False)
 
 
 @asynccontextmanager
