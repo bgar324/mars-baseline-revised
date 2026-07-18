@@ -40,7 +40,9 @@ export const StageNodeSchema = z
 export const PipelineStateSchema = z
   .object({
     query_id: z.string(),
-    stages: z.record(StageNameSchema, StageNodeSchema),
+    // Baseline deployments expose only the debate stage; full MARS exposes all
+    // five stages.
+    stages: z.partialRecord(StageNameSchema, StageNodeSchema),
     created_at: z.string(),
     updated_at: z.string(),
   })
