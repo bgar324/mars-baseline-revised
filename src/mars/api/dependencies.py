@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 
 from mars.client.s2 import SemanticScholarClient
 from mars.config.settings import AppSettings, DebateSettings
-from mars.db.study import StudySessionRecorder
 from mars.llm.providers.gemini import GeminiProvider
+from mars.session_cache import SessionCache
 from mars.workflow.pipeline import Pipeline, build
 
 if TYPE_CHECKING:
@@ -43,8 +43,8 @@ def get_judge_provider() -> GeminiProvider:
 
 
 @lru_cache(maxsize=1)
-def get_study_recorder() -> StudySessionRecorder:
-    return StudySessionRecorder(get_settings().supabase)
+def get_session_cache() -> SessionCache:
+    return SessionCache()
 
 
 @lru_cache(maxsize=1)
@@ -61,5 +61,5 @@ def get_pipeline() -> Pipeline:
             "minCitationCount": settings.pipeline.retrieval.min_citation_count
         },
         include_debate=True,
-        recorder=get_study_recorder(),
+        recorder=get_session_cache(),
     )

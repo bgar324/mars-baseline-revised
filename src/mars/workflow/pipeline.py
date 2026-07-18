@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from enum import Enum
 from time import perf_counter
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 
 from loguru import logger as _logger
@@ -44,7 +44,6 @@ from mars.schemas.query import (
 from mars.workflow.base import BaseNode, WorkflowContext
 
 if TYPE_CHECKING:
-    from mars.db.study import StudySessionRecorder
     from mars.llm.providers.langextract import LangExtractProvider
     from mars.workflow.debate import DebateNodeConfig
     from mars.workflow.persona import PersonaNodeConfig
@@ -55,6 +54,21 @@ class PipelineError(Exception): ...
 
 
 class NotFoundError(PipelineError): ...
+
+
+class SessionRecorder(Protocol):
+    async def upsert_session(
+        self,
+        *,
+        state: PipelineState,
+        ctx: WorkflowContext,
+        backend_snapshot: dict[str, Any],
+        frontend_snapshot: dict[str, Any] | None = None,
+        export_payload: dict[str, Any] | None = None,
+        wait: bool = False,
+    ) -> None: ...
+
+    async def record_event(self, event: PipelineEvent) -> None: ...
 
 
 def _now() -> datetime:
@@ -192,7 +206,7 @@ class Pipeline:
         self,
         *,
         nodes: list[BaseNode],
-        recorder: "StudySessionRecorder | None" = None,
+        recorder: SessionRecorder | None = None,
     ) -> None:
         self._nodes = nodes
         self._order = [n.stage for n in nodes]
@@ -750,7 +764,7 @@ def build(
     judge_llm: LLMProvider | None = None,
     retrieval_filters: dict | None = None,
     preset: Preset | None = None,
-    recorder: "StudySessionRecorder | None" = None,
+    recorder: SessionRecorder | None = None,
 ) -> Pipeline:
     from mars.workflow.cluster import ClusterNode
     from mars.workflow.debate import DebateNode
@@ -800,7 +814,7 @@ def build_baseline(
     s2: SemanticScholarClient,
     judge_llm: LLMProvider | None = None,
     retrieval_filters: dict | None = None,
-    recorder: "StudySessionRecorder | None" = None,
+    recorder: SessionRecorder | None = None,
 ) -> Pipeline:
     """Build the manual baseline without importing the ML research pipeline."""
     from mars.workflow.debate import DebateNode

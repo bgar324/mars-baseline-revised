@@ -1,94 +1,31 @@
 import asyncio
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import mars.db.study as study_mod
-from mars.config.settings import SupabaseSettings
-from mars.db.study import StudySessionRecorder
 from mars.models.debate import AgentResponse, AgentTurn, Cycle, Debate
 from mars.models.persona import Persona
 from mars.schemas.event import EventType
+from mars.session_cache import SessionCache
 from mars.workflow.base import WorkflowContext
 from mars.workflow.debate import DebateRuntime, turn_payload
 from mars.workflow.pipeline import Pipeline
 
 
 # --------------------------------------------------------------------------
-# persistence: single reused client, non-blocking + coalesced, durable wait
+# session cache: no database, short-lived cross-request snapshots
 # --------------------------------------------------------------------------
 
 
-class _FakeQuery:
-    def __init__(self, sink: list, table: str, op: str, payload) -> None:
-        self._sink = sink
-        self._table = table
-        self._op = op
-        self._payload = payload
-
-    async def execute(self):
-        self._sink.append((self._table, self._op, self._payload))
-        return None
-
-
-class _FakeTable:
-    def __init__(self, sink: list, name: str) -> None:
-        self._sink = sink
-        self._name = name
-
-    def upsert(self, payload, on_conflict=None):
-        return _FakeQuery(self._sink, self._name, "upsert", payload)
-
-    def insert(self, payload):
-        return _FakeQuery(self._sink, self._name, "insert", payload)
-
-    def select(self, *_columns):
-        return _FakeSelectQuery()
-
-
-class _FakeSelectQuery:
+class _FakeCache:
     def __init__(self) -> None:
-        self._query_id: str | None = None
+        self.values: dict[str, object] = {}
+        self.writes: list[tuple[str, object, dict | None]] = []
 
-    def eq(self, _column: str, value: str):
-        self._query_id = value
-        return self
+    async def get(self, key: str) -> object:
+        return self.values.get(key)
 
-    def limit(self, _count: int):
-        return self
-
-    async def execute(self):
-        snapshot = _FakeClient.snapshots.get(self._query_id or "")
-        rows = [{"backend_snapshot": snapshot}] if snapshot is not None else []
-        return SimpleNamespace(data=rows)
-
-
-class _FakeClient:
-    instances = 0
-    all_writes: list = []
-    snapshots: dict[str, dict] = {}
-
-    def __init__(self, settings, *, use_secret_key=False) -> None:
-        self.writes = type(self).all_writes
-
-    async def __aenter__(self):
-        type(self).instances += 1
-        return self
-
-    async def __aexit__(self, *exc):
-        return None
-
-    def table(self, name: str) -> _FakeTable:
-        return _FakeTable(self.writes, name)
-
-    @classmethod
-    def reset(cls) -> None:
-        cls.instances = 0
-        cls.all_writes = []
-        cls.snapshots = {}
-
-
-def _settings() -> SupabaseSettings:
-    return SupabaseSettings(url="http://localhost", secret_key="secret")
+    async def set(self, key: str, value: object, options: dict | None = None) -> None:
+        self.values[key] = value
+        self.writes.append((key, value, options))
 
 
 def _state_and_ctx():
@@ -97,73 +34,31 @@ def _state_and_ctx():
     return state, pipeline.get_context(state.query_id)
 
 
-def test_disabled_recorder_is_noop() -> None:
-    recorder = StudySessionRecorder(
-        SupabaseSettings(url=None, publishable_key=None, secret_key=None)
-    )
-    assert recorder.enabled is False
+def test_session_cache_writes_latest_snapshot_with_ttl() -> None:
+    backend = _FakeCache()
+    cache = SessionCache(backend, ttl_seconds=120)
     state, ctx = _state_and_ctx()
 
     async def go():
-        await recorder.upsert_session(
-            state=state, ctx=ctx, backend_snapshot={}, wait=True
+        await cache.upsert_session(
+            state=state, ctx=ctx, backend_snapshot={"n": 1}, wait=True
         )
-        await recorder.aclose()
-
-    asyncio.run(go())  # must not raise or touch the network
-
-
-def test_wait_true_is_durable_and_reuses_one_client(monkeypatch) -> None:
-    _FakeClient.reset()
-    monkeypatch.setattr(study_mod, "SupabaseClient", _FakeClient)
-    recorder = StudySessionRecorder(_settings())
-    state, ctx = _state_and_ctx()
-
-    async def go():
-        for _ in range(3):
-            await recorder.upsert_session(
-                state=state, ctx=ctx, backend_snapshot={"n": 1}, wait=True
-            )
-        await recorder.aclose()
+        await cache.upsert_session(state=state, ctx=ctx, backend_snapshot={"n": 2})
 
     asyncio.run(go())
-    # Every wait=True call is durable before returning...
-    assert len(_FakeClient.all_writes) == 3
-    # ...and they all rode a single long-lived client, not one-per-call.
-    assert _FakeClient.instances == 1
+
+    assert backend.values[state.query_id] == {"n": 2}
+    assert backend.writes[-1] == (state.query_id, {"n": 2}, {"ttl": 120})
 
 
-def test_non_blocking_upserts_coalesce_per_query(monkeypatch) -> None:
-    _FakeClient.reset()
-    monkeypatch.setattr(study_mod, "SupabaseClient", _FakeClient)
-    recorder = StudySessionRecorder(_settings())
-    state, ctx = _state_and_ctx()
+def test_load_session_returns_cached_backend_snapshot() -> None:
+    backend = _FakeCache()
+    backend.values["query-1"] = {"query_id": "query-1", "state": {}}
+    cache = SessionCache(backend)
 
     async def go():
-        # Enqueue several snapshots without yielding to the worker between them:
-        # they should collapse to the freshest write for this query_id.
-        for i in range(5):
-            await recorder.upsert_session(
-                state=state, ctx=ctx, backend_snapshot={"n": i}
-            )
-        await recorder.aclose()
-
-    asyncio.run(go())
-    upserts = [w for w in _FakeClient.all_writes if w[1] == "upsert"]
-    assert len(upserts) < 5  # coalesced
-    assert upserts[-1][2]["backend_snapshot"] == {"n": 4}  # freshest wins
-
-
-def test_load_session_returns_persisted_backend_snapshot(monkeypatch) -> None:
-    _FakeClient.reset()
-    _FakeClient.snapshots["query-1"] = {"query_id": "query-1", "state": {}}
-    monkeypatch.setattr(study_mod, "SupabaseClient", _FakeClient)
-    recorder = StudySessionRecorder(_settings())
-
-    async def go():
-        snapshot = await recorder.load_session("query-1")
-        missing = await recorder.load_session("missing")
-        await recorder.aclose()
+        snapshot = await cache.load_session("query-1")
+        missing = await cache.load_session("missing")
         return snapshot, missing
 
     snapshot, missing = asyncio.run(go())
@@ -197,9 +92,7 @@ def _stub_turn(agent_id: str) -> AgentTurn:
     return AgentTurn(
         agent_id=agent_id,
         phase="proposal",
-        response=AgentResponse(
-            claim="c", rationale="r", message="m", evidence=["42"]
-        ),
+        response=AgentResponse(claim="c", rationale="r", message="m", evidence=["42"]),
     )
 
 

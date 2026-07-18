@@ -6,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from mars.api.baseline_dependencies import (
     get_baseline_gemini,
-    get_baseline_recorder,
     get_baseline_s2,
     get_restored_baseline_pipeline,
 )
@@ -22,7 +21,6 @@ configure_logging(enqueue=False)
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
-    await get_baseline_recorder().aclose()
     await get_baseline_s2().aclose()
 
 

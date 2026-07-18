@@ -83,19 +83,6 @@ class LangExtractSettings(BaseSettings):
     max_char_buffer: int = Field(default=1000, ge=100, le=5000)
 
 
-class SupabaseSettings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_prefix="SUPABASE_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    url: str | None = None
-    publishable_key: SecretStr | None = None
-    secret_key: SecretStr | None = None
-
-
 class SemanticScholarSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="SEMANTIC_SCHOLAR_",
@@ -134,7 +121,6 @@ class AppSettings(BaseSettings):
     openai: OpenAISettings = Field(default_factory=OpenAISettings)
     openrouter: OpenRouterSettings = Field(default_factory=OpenRouterSettings)
     langextract: LangExtractSettings = Field(default_factory=LangExtractSettings)
-    supabase: SupabaseSettings = Field(default_factory=SupabaseSettings)
     s2: SemanticScholarSettings = Field(default_factory=SemanticScholarSettings)
     huggingface: HuggingFaceSettings = Field(default_factory=HuggingFaceSettings)
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
@@ -150,6 +136,5 @@ class BaselineAppSettings(BaseSettings):
     )
 
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
-    supabase: SupabaseSettings = Field(default_factory=SupabaseSettings)
     s2: SemanticScholarSettings = Field(default_factory=SemanticScholarSettings)
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)

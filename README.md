@@ -27,16 +27,9 @@ uv run --extra full fastapi dev src/mars/app.py
 
 The full pipeline additionally requires `LANGEXTRACT_API_KEY`.
 
-For formative-study persistence, also set:
-
-```bash
-SUPABASE_URL=
-SUPABASE_PUBLISHABLE_KEY=
-SUPABASE_SECRET_KEY=
-```
-
-Apply the schemas in `supabase/migrations/` to the configured Supabase project
-before study sessions.
+Session state is temporary: Vercel deployments use the project's Runtime Cache
+for six hours, while local development uses an in-memory fallback. No database
+or database environment variables are required.
 
 Frontend (Next.js, port 3000):
 
