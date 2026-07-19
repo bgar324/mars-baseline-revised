@@ -75,10 +75,11 @@ BASELINE_CHAT_PROMPT = """## RESEARCH PROBLEM
 ## FOCAL CLAIM
 {focal_claim}
 
-## CURRENT RESEARCH ARTIFACT
-Previous work: {previous_work}
-Reasoning: {reasoning}
-Working hypothesis: {hypothesis}
+## YOUR GENERATED HYPOTHESIS
+{hypothesis}
+
+## YOUR PRIOR DEBATE CONTRIBUTIONS
+{prior_turns}
 
 ## AVAILABLE EVIDENCE
 {evidence}

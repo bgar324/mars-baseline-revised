@@ -6,7 +6,7 @@ import type { PersonaAgent } from "@/types/persona"
 
 type BaselineState = {
   activeAgentIds: number[]
-  target: "all" | number
+  target: number | null
   startedAt: string | null
   testMode: boolean
   manualPersonas: PersonaAgent[]
@@ -15,7 +15,7 @@ type BaselineState = {
 
 type BaselineActions = {
   activeAgentsSet: (ids: number[]) => void
-  targetSet: (target: "all" | number) => void
+  targetSet: (target: number | null) => void
   sessionStarted: (testMode?: boolean) => void
   manualPersonaAdded: (persona: PersonaAgent) => void
   manualPersonaEdited: (
@@ -29,7 +29,7 @@ type BaselineActions = {
 
 const initialState: BaselineState = {
   activeAgentIds: [],
-  target: "all",
+  target: null,
   startedAt: null,
   testMode: false,
   manualPersonas: [],
@@ -62,7 +62,7 @@ export const useBaselineStore = create<BaselineState & BaselineActions>()(
             (persona) => persona.cluster_id !== clusterId,
           ),
           activeAgentIds: state.activeAgentIds.filter((id) => id !== clusterId),
-          target: state.target === clusterId ? "all" : state.target,
+          target: state.target === clusterId ? null : state.target,
         })),
       manualPapersAdded: (papers) =>
         set((state) => ({

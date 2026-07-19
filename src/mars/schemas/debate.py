@@ -14,4 +14,4 @@ class DebateRequest(BaseModel):
 
 class BaselineChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
-    agent_ids: list[str] = Field(min_length=1, max_length=4)
+    agent_ids: list[str] = Field(min_length=1, max_length=1)

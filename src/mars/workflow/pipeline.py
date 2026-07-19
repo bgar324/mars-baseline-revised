@@ -349,7 +349,24 @@ class Pipeline:
             ),
         )
 
+        debate_node = next(node for node in self._nodes if node.stage is StageName.DEBATE)
+        steps_by_name = {step.name: step for step in debate_node.steps}
         for step_name, step_node in stage_node.steps.items():
+            if not steps_by_name[step_name].should_run(ctx):
+                step_node.status = StepStatus.SKIPPED
+                step_node.completed_at = _now()
+                await self._emit(
+                    query_id,
+                    PipelineEvent(
+                        event=EventType.STEP_SKIPPED,
+                        query_id=query_id,
+                        stage=StageName.DEBATE,
+                        step=step_name,
+                        payload={"test_mode": True},
+                        timestamp=_now(),
+                    ),
+                )
+                continue
             step_node.status = StepStatus.RUNNING
             step_node.started_at = _now()
             await self._emit(
@@ -597,6 +614,7 @@ class Pipeline:
                 "persona_pool": _dump(ctx.persona_pool),
                 "debate": _dump(ctx.debate),
                 "cycle": _dump(ctx.cycle),
+                "baseline_conversations": _dump(ctx.baseline_conversations),
                 "synthesis": _dump(ctx.cycle.synthesis)
                 if ctx.cycle is not None
                 else None,

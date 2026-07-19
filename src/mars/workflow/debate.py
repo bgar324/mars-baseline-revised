@@ -232,6 +232,10 @@ class DebateNodeConfig:
     synthesis: bool = True
     select_best: bool = True
     compose: bool = True
+    # The baseline is intentionally a direct conversation with the individual
+    # researchers. It keeps their final hypotheses instead of creating a
+    # judge-authored synthesis artifact.
+    baseline_synthesis: bool = False
 
 
 class DebateRuntime:
@@ -635,9 +639,21 @@ class DebateRuntime:
 
 
 class _RuntimeStep(BaseStep):
-    def __init__(self, runtime: DebateRuntime, *, enabled: bool = True) -> None:
+    def __init__(
+        self,
+        runtime: DebateRuntime,
+        *,
+        enabled: bool = True,
+        baseline_enabled: bool = True,
+    ) -> None:
         super().__init__(enabled=enabled)
         self._rt = runtime
+        self._baseline_enabled = baseline_enabled
+
+    def should_run(self, ctx: WorkflowContext) -> bool:
+        return super().should_run(ctx) and (
+            ctx.condition != "baseline" or self._baseline_enabled
+        )
 
 
 class PrepareEvidenceStep(_RuntimeStep):
@@ -789,9 +805,21 @@ class DebateNode(BaseNode):
             RebuttalStep(rt, enabled=cfg.rebuttal),
             RefinementStep(rt, enabled=cfg.refinement),
             AdjudicationStep(rt, enabled=cfg.adjudication),
-            SynthesisStep(rt, enabled=cfg.synthesis),
-            SelectBestStep(rt, enabled=cfg.select_best),
-            ComposeStep(rt, enabled=cfg.compose),
+            SynthesisStep(
+                rt,
+                enabled=cfg.synthesis,
+                baseline_enabled=cfg.baseline_synthesis,
+            ),
+            SelectBestStep(
+                rt,
+                enabled=cfg.select_best,
+                baseline_enabled=cfg.baseline_synthesis,
+            ),
+            ComposeStep(
+                rt,
+                enabled=cfg.compose,
+                baseline_enabled=cfg.baseline_synthesis,
+            ),
         ]
         super().__init__(stage=StageName.DEBATE, name="debate", steps=steps)
 

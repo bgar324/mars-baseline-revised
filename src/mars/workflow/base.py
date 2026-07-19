@@ -43,6 +43,12 @@ class WorkflowContext:
     persona_pool: list[Persona] | None = None
     debate: Debate | None = None
     cycle: Cycle | None = None
+    # Baseline follow-ups are one-on-one conversations. Keep each researcher's
+    # transcript separate so changing researchers never mixes their context.
+    baseline_conversations: dict[str, list[BaselineMessage]] = field(
+        default_factory=dict
+    )
+    # Retained as a flattened audit trail for existing exports.
     baseline_messages: list[BaselineMessage] = field(default_factory=list)
     emit: ProgressSink | None = None
 
@@ -108,6 +114,10 @@ class BaseStep(ABC):
     def __init__(self, *, enabled: bool = True) -> None:
         self.enabled = enabled
 
+    def should_run(self, ctx: WorkflowContext) -> bool:
+        """Whether this step applies to this particular workflow context."""
+        return self.enabled
+
     @abstractmethod
     async def run(self, ctx: WorkflowContext) -> WorkflowContext: ...
 
@@ -164,7 +174,7 @@ class BaseNode(ABC):
         ctx = await self.before_run(ctx)
         try:
             for step in self.steps:
-                if not step.enabled:
+                if not step.should_run(ctx):
                     if observer:
                         await observer.on_step_skip(step.name)
                     continue

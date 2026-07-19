@@ -54,7 +54,6 @@ import { InstructionsEditor } from "@/features/agent-builder/context-panel/instr
 import { useBaselineChat, useSendBaselineMessage } from "@/hooks/use-baseline-chat"
 import { useBaselineExport } from "@/hooks/use-baseline-export"
 import { useDebate } from "@/hooks/use-debate"
-import { useHypotheses } from "@/hooks/use-hypotheses"
 import {
   PAPER_SEARCH_PAGE_SIZE,
   usePaperSearch,
@@ -65,10 +64,9 @@ import { cn } from "@/lib/utils"
 import { useAgentBuilderStore } from "@/store/agent-builder"
 import { useBaselineStore } from "@/store/baseline"
 import type { BaselineMessage } from "@/types/baseline"
-import type { AgentTurn, EvidenceSet, Synthesis } from "@/types/debate"
+import type { AgentTurn, EvidenceSet } from "@/types/debate"
 import type { Paper } from "@/types/paper"
 import type { PersonaAgent } from "@/types/persona"
-import { humanizeEnum } from "@/utils/format"
 
 const LABEL =
   "text-[11px] font-medium uppercase tracking-normal text-muted-foreground"
@@ -131,24 +129,6 @@ const DEBATE_ACTIVITIES = [
     label: "Checking disputed claims",
     cardLabel: "Checking claims against evidence",
     detail: "The strongest points are being checked against the retrieved literature.",
-  },
-  {
-    step: "debate.synthesis",
-    label: "Generating candidate hypotheses",
-    cardLabel: "Contributing to candidate hypotheses",
-    detail: "Distinct, testable hypotheses are being extracted from the discussion.",
-  },
-  {
-    step: "debate.select_best",
-    label: "Selecting the strongest hypothesis",
-    cardLabel: "Evaluating the candidate hypotheses",
-    detail: "Candidates are being compared for relevance, grounding, and testability.",
-  },
-  {
-    step: "debate.compose",
-    label: "Composing the research artifact",
-    cardLabel: "Finalizing the research artifact",
-    detail: "The evidence, reasoning, and selected hypothesis are being assembled.",
   },
 ] as const
 
@@ -278,7 +258,6 @@ function DiscussionWorkspace() {
     (state) => state.researchProblemDraftChanged,
   )
   const { data: debate } = useDebate()
-  const { data: synthesis } = useHypotheses()
   const { data: conversation } = useBaselineChat()
   const manualPersonas = useBaselineStore((state) => state.manualPersonas)
   const manualPapers = useBaselineStore((state) => state.manualPapers)
@@ -297,6 +276,8 @@ function DiscussionWorkspace() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [newPerspectiveId, setNewPerspectiveId] = useState<number | null>(null)
+  const [focusAgentId, setFocusAgentId] = useState<number | null>(null)
+  const targetSet = useBaselineStore((state) => state.targetSet)
 
   const addPerspective = () => {
     const clusterId =
@@ -398,11 +379,14 @@ function DiscussionWorkspace() {
           </div>
           <ResearcherSidebar
             personas={manualPersonas}
-            turns={debate?.cycle?.turns ?? []}
             evidence={debate?.cycle?.evidence ?? {}}
-            papers={manualPapers}
             onEdit={setEditingId}
             onAdd={addPerspective}
+            onAskAgent={(agentId) => {
+              targetSet(agentId)
+              setFocusAgentId(agentId)
+              setSidebarOpen(false)
+            }}
           />
         </aside>
 
@@ -421,10 +405,13 @@ function DiscussionWorkspace() {
           </div>
           <ConversationPanel
             personas={manualPersonas}
-            synthesis={synthesis}
+            turns={debate?.cycle?.turns ?? []}
+            evidence={debate?.cycle?.evidence ?? {}}
             messages={conversation?.messages ?? []}
             papers={manualPapers}
             question={question}
+            focusAgentId={focusAgentId}
+            onFocusHandled={() => setFocusAgentId(null)}
           />
         </main>
       </div>
@@ -450,18 +437,16 @@ function DiscussionWorkspace() {
 
 function ResearcherSidebar({
   personas,
-  turns,
   evidence,
-  papers,
   onEdit,
   onAdd,
+  onAskAgent,
 }: {
   personas: PersonaAgent[]
-  turns: AgentTurn[]
   evidence: Record<string, EvidenceSet>
-  papers: Paper[]
   onEdit: (id: number) => void
   onAdd: () => void
+  onAskAgent: (id: number) => void
 }) {
   const activeIds = useBaselineStore((state) => state.activeAgentIds)
   const activeAgentsSet = useBaselineStore((state) => state.activeAgentsSet)
@@ -487,7 +472,7 @@ function ResearcherSidebar({
       ? activeIds.filter((id) => id !== clusterId)
       : [...activeIds, clusterId]
     activeAgentsSet(next)
-    if (typeof target === "number" && !next.includes(target)) targetSet("all")
+    if (typeof target === "number" && !next.includes(target)) targetSet(null)
   }
 
   return (
@@ -511,7 +496,9 @@ function ResearcherSidebar({
               </Button>
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Build and select 2–4 perspectives for the discussion.
+              {locked
+                ? "Choose a researcher to discuss their hypothesis."
+                : "Build and select 2–4 perspectives for the discussion."}
             </p>
           </div>
           <span className="text-[10px] text-muted-foreground">
@@ -540,30 +527,20 @@ function ResearcherSidebar({
             {personas.map((persona) => {
               const active = activeIds.includes(persona.cluster_id)
               const agentEvidence = evidence[String(persona.cluster_id)]
-              const proposal = turns.find(
-                (turn) =>
-                  turn.agent_id === String(persona.cluster_id) &&
-                  turn.phase === "proposal",
-              )
               return (
                 <ResearcherCard
                   key={persona.cluster_id}
                   persona={persona}
                   active={active}
+                  selected={target === persona.cluster_id}
                   locked={locked}
                   loading={debateStage === "running" && active}
                   livePhase={thinkingAgents[String(persona.cluster_id)]}
-                  proposal={proposal}
                   activity={activity}
                   evidenceCount={agentEvidence?.snippets.length ?? 0}
-                  previousWork={formatPreviousWork(
-                    persona,
-                    proposal,
-                    papers,
-                    agentEvidence,
-                  )}
                   onToggle={() => toggle(persona.cluster_id)}
                   onEdit={() => onEdit(persona.cluster_id)}
+                  onAskAgent={() => onAskAgent(persona.cluster_id)}
                 />
               )
             })}
@@ -577,27 +554,27 @@ function ResearcherSidebar({
 function ResearcherCard({
   persona,
   active,
+  selected,
   locked,
   loading,
   livePhase,
-  proposal,
   activity,
   evidenceCount,
-  previousWork,
   onToggle,
   onEdit,
+  onAskAgent,
 }: {
   persona: PersonaAgent
   active: boolean
+  selected: boolean
   locked: boolean
   loading: boolean
   livePhase: string | undefined
-  proposal: AgentTurn | undefined
   activity: DebateActivity
   evidenceCount: number
-  previousWork: string
   onToggle: () => void
   onEdit: () => void
+  onAskAgent: () => void
 }) {
   return (
     <div
@@ -616,7 +593,7 @@ function ResearcherCard({
       }
       className={cn(
         "overflow-hidden rounded-lg border bg-background transition-colors",
-        active && "border-primary/45",
+        selected ? "border-primary ring-1 ring-primary/25" : active && "border-primary/45",
         !active && "opacity-65",
         !locked && "cursor-pointer hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
       )}
@@ -670,140 +647,52 @@ function ResearcherCard({
         </div>
       </div>
 
-      {active && (loading || proposal) && (
+      {active && loading && (
         <div className="border-t bg-muted/20 px-3 py-3">
-          {loading && (
-            <div className={cn(proposal && "mb-3 border-b pb-3")}>
-              <div className="min-w-0">
-                <TextShimmer className="text-xs">
-                  {(livePhase && LIVE_PHASE_LABEL[livePhase]) ||
-                    activity.cardLabel}
-                </TextShimmer>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                  {evidenceCount > 0
-                    ? `Reviewing ${persona.references.length} attached paper${persona.references.length === 1 ? "" : "s"}; ${evidenceCount} relevant evidence passage${evidenceCount === 1 ? "" : "s"} selected.`
-                    : persona.references.length > 0
-                      ? `Searching ${persona.references.length} attached paper${persona.references.length === 1 ? "" : "s"} for the most relevant evidence.`
-                      : "Locating evidence relevant to this perspective."}
-                </p>
-              </div>
-            </div>
-          )}
-          {proposal && (
-            <div className="space-y-2.5">
-              <HypothesisField
-                kind="previous"
-                label="Previous work"
-                text={previousWork}
-              />
-              <HypothesisField
-                kind="reasoning"
-                label="Reasoning"
-                text={proposal.response.rationale}
-              />
-              <HypothesisField
-                kind="hypothesis"
-                label="Hypothesis"
-                text={proposal.response.claim}
-              />
-            </div>
-          )}
+          <div className="min-w-0">
+            <TextShimmer className="text-xs">
+              {(livePhase && LIVE_PHASE_LABEL[livePhase]) || activity.cardLabel}
+            </TextShimmer>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+              {evidenceCount > 0
+                ? `Reviewing ${persona.references.length} attached paper${persona.references.length === 1 ? "" : "s"}; ${evidenceCount} relevant evidence passage${evidenceCount === 1 ? "" : "s"} selected.`
+                : persona.references.length > 0
+                  ? `Searching ${persona.references.length} attached paper${persona.references.length === 1 ? "" : "s"} for the most relevant evidence.`
+                  : "Locating evidence relevant to this perspective."}
+            </p>
+          </div>
+        </div>
+      )}
+      {active && locked && !loading && (
+        <div className="border-t bg-muted/20 p-2">
+          <Button className="w-full" size="sm" onClick={onAskAgent}>
+            <MessageSquareText />
+            {selected ? "Continue with" : "Ask"} {persona.name || "this researcher"}
+          </Button>
         </div>
       )}
     </div>
   )
 }
 
-function HypothesisField({
-  kind,
-  label,
-  text,
-}: {
-  kind: "previous" | "reasoning" | "hypothesis"
-  label: string
-  text: string
-}) {
-  return (
-    <div className="rounded-md border bg-background px-3 py-2.5">
-      <span
-        className={cn(
-          "text-[9px] uppercase tracking-wide",
-          kind === "previous" && "text-agent-5",
-          kind === "reasoning" && "text-agent-2",
-          kind === "hypothesis" && "text-agent-3",
-        )}
-      >
-        {label}
-      </span>
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {text}
-      </p>
-    </div>
-  )
-}
-
-function formatPreviousWork(
-  persona: PersonaAgent,
-  proposal: AgentTurn | undefined,
-  papers: Paper[],
-  evidence: EvidenceSet | undefined,
-): string {
-  const byCorpusId = new Map(
-    papers
-      .filter((paper) => paper.corpus_id != null)
-      .map((paper) => [String(paper.corpus_id), paper]),
-  )
-  const byId = new Map(papers.map((paper) => [paper.id, paper]))
-  const snippetsByCorpusId = new Map(
-    (evidence?.snippets ?? []).map((snippet) => [snippet.corpus_id, snippet]),
-  )
-  const citedIds = proposal?.response.evidence ?? []
-  const cited = citedIds
-    .map((id) => byCorpusId.get(id) ?? byId.get(id))
-    .filter((paper): paper is Paper => !!paper)
-  const referenced = persona.references
-    .map((id) => byId.get(id))
-    .filter((paper): paper is Paper => !!paper)
-  const selected = [...new Map([...cited, ...referenced].map((paper) => [paper.id, paper])).values()].slice(0, 4)
-  const paperEntries = selected
-    .map((paper) => {
-      const author = paper.authors[0]?.name
-      const authorText = author
-        ? `${author}${paper.authors.length > 1 ? " et al." : ""}`
-        : null
-      const year = paper.year ? ` (${paper.year})` : ""
-      return authorText
-        ? `${authorText}${year} on ${paper.title}`
-        : `${paper.title}${year}`
-    })
-  const knownCorpusIds = new Set(
-    selected
-      .map((paper) => paper.corpus_id)
-      .filter((id): id is number => id != null)
-      .map(String),
-  )
-  const snippetEntries = citedIds
-    .filter((id) => !knownCorpusIds.has(id))
-    .map((id) => snippetsByCorpusId.get(id)?.title)
-    .filter((title): title is string => !!title)
-  const entries = [...paperEntries, ...snippetEntries].slice(0, 4)
-  return entries.length > 0
-    ? entries.join("; ")
-    : "No source paper was attached to this position."
-}
-
 function ConversationPanel({
   personas,
-  synthesis,
+  turns,
+  evidence,
   messages,
   papers,
   question,
+  focusAgentId,
+  onFocusHandled,
 }: {
   personas: PersonaAgent[]
-  synthesis: Synthesis | undefined
+  turns: AgentTurn[]
+  evidence: Record<string, EvidenceSet>
   messages: BaselineMessage[]
   papers: Paper[]
   question: string
+  focusAgentId: number | null
+  onFocusHandled: () => void
 }) {
   const activeIds = useBaselineStore((state) => state.activeAgentIds)
   const target = useBaselineStore((state) => state.target)
@@ -817,8 +706,13 @@ function ConversationPanel({
   const [draft, setDraft] = useState("")
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null)
 
   const active = personas.filter((persona) => activeIds.includes(persona.cluster_id))
+  const targetPersona = active.find((persona) => persona.cluster_id === target)
+  const openingHypothesis = targetPersona
+    ? generatedHypothesis(turns, targetPersona.cluster_id)
+    : undefined
   const canGenerate =
     question.trim().length > 0 &&
     active.length >= 2 &&
@@ -841,18 +735,25 @@ function ConversationPanel({
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
   }, [messages.length, pendingPrompt, send.isPending])
 
+  useEffect(() => {
+    if (active.length === 0) return
+    if (!targetPersona) targetSet(active[0].cluster_id)
+  }, [active, targetPersona, targetSet])
+
+  useEffect(() => {
+    if (focusAgentId == null) return
+    inputRef.current?.focus()
+    onFocusHandled()
+  }, [focusAgentId, onFocusHandled])
+
   const submit = async () => {
     const text = draft.trim()
     if (!text || send.isPending || debateStage !== "complete") return
-    const agentIds =
-      target === "all"
-        ? active.map((persona) => persona.cluster_id)
-        : [target]
-    if (agentIds.length === 0) return
+    if (!targetPersona) return
     setDraft("")
     setPendingPrompt(text)
     try {
-      await send.mutateAsync({ message: text, agentIds })
+      await send.mutateAsync({ message: text, agentId: targetPersona.cluster_id })
       setPendingPrompt(null)
     } catch {
       setDraft(text)
@@ -929,27 +830,16 @@ function ConversationPanel({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8">
         <div className="mx-auto flex max-w-3xl flex-col">
-          {synthesis?.meta_review && (
-            <WorkingHypothesis synthesis={synthesis} />
-          )}
-
-          <div className="mt-7 flex items-center gap-3">
-            <div className="h-px flex-1 bg-border" />
-            <span className={LABEL}>Discussion</span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
-
-          {messages.length === 0 && !pendingPrompt && (
-            <div className="py-12 text-center">
-              <p className="text-xl font-semibold">The research team is ready.</p>
-              <p className="mx-auto mt-2 max-w-md text-s leading-relaxed text-muted-foreground">
-                Ask for clarification, challenge an assumption, or query one
-                researcher directly using the controls below.
-              </p>
-            </div>
-          )}
-
-          <div className="mt-4 flex flex-col gap-1">
+          <div className="flex flex-col gap-1">
+            {targetPersona && openingHypothesis && (
+              <HypothesisOpening
+                key={`${targetPersona.cluster_id}-${openingHypothesis.turn_id}`}
+                persona={targetPersona}
+                turn={openingHypothesis}
+                evidence={evidence[String(targetPersona.cluster_id)]}
+                papersByCorpusId={papersByCorpusId}
+              />
+            )}
             {messages.map((message) => (
               <MessageRow
                 key={message.message_id}
@@ -963,20 +853,14 @@ function ConversationPanel({
                 <UserMessage content={pendingPrompt} />
                 {send.isPending && (
                   <div className="flex gap-3 py-4">
-                    <div className="flex -space-x-2">
-                      {(target === "all"
-                        ? active
-                        : active.filter((persona) => persona.cluster_id === target)
-                      ).map((persona) => (
-                        <AgentAvatar
-                          key={persona.cluster_id}
-                          clusterId={persona.cluster_id}
-                          name={persona.name}
-                          className="size-7 border-2 border-background"
-                          fallbackClassName="text-[9px]"
-                        />
-                      ))}
-                    </div>
+                    {targetPersona && (
+                      <AgentAvatar
+                        clusterId={targetPersona.cluster_id}
+                        name={targetPersona.name}
+                        className="size-7 border-2 border-background"
+                        fallbackClassName="text-[9px]"
+                      />
+                    )}
                     <TextShimmer className="text-s">Considering your question...</TextShimmer>
                   </div>
                 )}
@@ -990,6 +874,7 @@ function ConversationPanel({
       <div className="shrink-0 border-t bg-background px-4 py-3 sm:px-8 sm:py-4">
         <div className="mx-auto max-w-3xl rounded-lg border bg-card p-2 shadow-sm focus-within:border-ring">
           <Textarea
+            ref={inputRef}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -998,29 +883,35 @@ function ConversationPanel({
                 submit()
               }
             }}
-            placeholder="Ask the research team a follow-up question..."
+            placeholder={
+              targetPersona
+                ? `Ask ${targetPersona.name} about this hypothesis...`
+                : "Choose a researcher from the hypothesis panel..."
+            }
             className="max-h-32 min-h-14 resize-none border-0 bg-transparent px-2 py-2 text-s shadow-none focus-visible:ring-0 md:text-s"
           />
-          <div className="flex flex-wrap items-center gap-1.5 border-t pt-2">
-            <span className="mr-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Ask
-            </span>
-            <TargetChip active={target === "all"} onClick={() => targetSet("all")}>
-              All researchers
-            </TargetChip>
-            {active.map((persona) => (
-              <TargetChip
-                key={persona.cluster_id}
-                active={target === persona.cluster_id}
-                onClick={() => targetSet(persona.cluster_id)}
-              >
-                {persona.name}
-              </TargetChip>
-            ))}
+          <div className="flex items-center gap-2 border-t pt-2">
+            {targetPersona ? (
+              <>
+                <AgentAvatar
+                  clusterId={targetPersona.cluster_id}
+                  name={targetPersona.name}
+                  className="size-5"
+                  fallbackClassName="text-[8px]"
+                />
+                <span className="min-w-0 truncate text-xs text-muted-foreground">
+                  Asking {targetPersona.name}
+                </span>
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                Choose a researcher in the hypothesis panel.
+              </span>
+            )}
             <Button
               size="sm"
               className="ml-auto"
-              disabled={!draft.trim() || send.isPending}
+              disabled={!draft.trim() || send.isPending || !targetPersona}
               onClick={submit}
               aria-label="Send message"
             >
@@ -1040,41 +931,136 @@ function ConversationPanel({
   )
 }
 
-function WorkingHypothesis({ synthesis }: { synthesis: Synthesis }) {
-  const meta = synthesis.meta_review
-  if (!meta) return null
+function generatedHypothesis(
+  turns: AgentTurn[],
+  clusterId: number,
+): AgentTurn | undefined {
+  const agentId = String(clusterId)
   return (
-    <Collapsible defaultOpen>
-      <div className="overflow-hidden rounded-lg border border-primary/25 bg-primary/4">
-        <CollapsibleTrigger className="group flex w-full items-center gap-3 px-4 py-3 text-left">
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] uppercase tracking-wide text-primary">
-              Working hypothesis
-            </span>
-            <p className="mt-0.5 line-clamp-2 text-s font-medium leading-snug">
-              {meta.hypothesis}
-            </p>
-          </div>
-          <ChevronDown className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="grid gap-px border-t bg-border sm:grid-cols-3">
-            <ArtifactField label="Previous work" text={meta.previous_work} />
-            <ArtifactField label="Reasoning" text={meta.reasoning} />
-            <ArtifactField label="Hypothesis" text={meta.hypothesis} />
-          </div>
-        </CollapsibleContent>
-      </div>
-    </Collapsible>
+    [...turns]
+      .reverse()
+      .find(
+        (turn) => turn.agent_id === agentId && turn.phase === "refinement",
+      ) ?? turns.find((turn) => turn.agent_id === agentId && turn.phase === "proposal")
   )
 }
 
-function ArtifactField({ label, text }: { label: string; text: string }) {
+function HypothesisOpening({
+  persona,
+  turn,
+  evidence,
+  papersByCorpusId,
+}: {
+  persona: PersonaAgent
+  turn: AgentTurn
+  evidence: EvidenceSet | undefined
+  papersByCorpusId: Map<string, Paper>
+}) {
+  const sourcePapers = hypothesisSources(evidence, papersByCorpusId)
+
   return (
-    <div className="bg-background px-4 py-3">
-      <span className={LABEL}>{label}</span>
-      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{text}</p>
+    <div className="flex gap-3 py-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
+      <AgentAvatar
+        clusterId={persona.cluster_id}
+        name={persona.name}
+        className="mt-0.5 size-8 shrink-0"
+        fallbackClassName="text-[10px]"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-s font-medium">{persona.name}</span>
+        </div>
+        <div className="mt-2 rounded-lg border border-primary/20 bg-primary/4 px-4 py-3">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-primary">
+            Hypothesis
+          </span>
+          <p className="mt-1.5 text-s leading-relaxed">{turn.response.claim}</p>
+        </div>
+        <SourceCitations label="Sources considered" papers={sourcePapers} />
+        <ReasoningDisclosure label="Hypothesis rationale" text={turn.response.rationale} />
+      </div>
     </div>
+  )
+}
+
+function hypothesisSources(
+  evidence: EvidenceSet | undefined,
+  papersByCorpusId: Map<string, Paper>,
+): Paper[] {
+  const sources = (evidence?.snippets ?? []).map((snippet) =>
+    papersByCorpusId.get(snippet.corpus_id) ?? evidenceSnippetPaper(snippet),
+  )
+  return [...new Map(sources.map((paper) => [paperIdentity(paper), paper])).values()]
+}
+
+function evidenceSnippetPaper(snippet: EvidenceSet["snippets"][number]): Paper {
+  const corpusId = Number(snippet.corpus_id)
+  return {
+    id: `corpus-${snippet.corpus_id}`,
+    corpus_id: Number.isSafeInteger(corpusId) ? corpusId : null,
+    title: snippet.title || "Untitled source",
+    abstract: null,
+    tldr: null,
+    venue: null,
+    year: null,
+    url: null,
+    doi: null,
+    arxiv_id: null,
+    open_access_pdf_url: null,
+    external_ids: {},
+    citation_count: null,
+    influential_citation_count: null,
+    authors: [],
+  }
+}
+
+function normalizeTitle(title: string): string {
+  return title.trim().toLocaleLowerCase().replace(/\W+/g, " ").trim()
+}
+
+function paperIdentity(paper: Paper): string {
+  return paper.doi
+    ? `doi:${paper.doi.toLocaleLowerCase()}`
+    : paper.arxiv_id
+      ? `arxiv:${paper.arxiv_id.toLocaleLowerCase()}`
+      : paper.corpus_id != null
+        ? `corpus:${paper.corpus_id}`
+        : `title:${normalizeTitle(paper.title)}`
+}
+
+function SourceCitations({
+  papers,
+  label = "Sources",
+}: {
+  papers: Paper[]
+  label?: string
+}) {
+  if (papers.length === 0) return null
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1">
+      <span className="mr-1 text-[9px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      {papers.map((paper, index) => (
+        <InlineCitation key={paperIdentity(paper)} paper={paper} index={index + 1} />
+      ))}
+    </div>
+  )
+}
+
+function ReasoningDisclosure({ label, text }: { label: string; text: string }) {
+  return (
+    <Collapsible className="mt-2">
+      <CollapsibleTrigger className="group flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
+        <ChevronDown className="size-3 transition-transform group-data-[state=open]:rotate-180" />
+        {label}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <p className="mt-2 border-l-2 pl-3 text-xs leading-relaxed text-muted-foreground">
+          {text}
+        </p>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -1105,45 +1091,18 @@ function MessageRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="text-s font-medium">{persona?.name ?? "Researcher"}</span>
-          {persona && (
-            <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
-              {humanizeEnum(persona.reasoning_style)} perspective
-            </span>
-          )}
         </div>
         <StreamingMarkdown
           text={message.content}
           className="mt-1 text-s leading-relaxed text-muted-foreground [&_p]:my-1 [&_p]:text-s"
         />
-        {message.evidence.length > 0 && (
-          <div className="mt-2 flex flex-wrap items-center gap-1">
-            <span className="mr-1 text-[9px] uppercase tracking-wide text-muted-foreground">
-              Sources
-            </span>
-            {message.evidence.map((corpusId, index) => {
-              const paper = papersByCorpusId.get(corpusId)
-              return paper ? (
-                <InlineCitation
-                  key={`${message.message_id}-${corpusId}`}
-                  paper={paper}
-                  index={index + 1}
-                />
-              ) : null
-            })}
-          </div>
-        )}
+        <SourceCitations
+          papers={message.evidence
+            .map((corpusId) => papersByCorpusId.get(corpusId))
+            .filter((paper): paper is Paper => !!paper)}
+        />
         {message.rationale && (
-          <Collapsible className="mt-2">
-            <CollapsibleTrigger className="group flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
-              <ChevronDown className="size-3 transition-transform group-data-[state=open]:rotate-180" />
-              Response rationale
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <p className="mt-2 border-l-2 pl-3 text-xs leading-relaxed text-muted-foreground">
-                {message.rationale}
-              </p>
-            </CollapsibleContent>
-          </Collapsible>
+          <ReasoningDisclosure label="Response rationale" text={message.rationale} />
         )}
       </div>
     </div>
@@ -1163,31 +1122,6 @@ function UserMessage({ content }: { content: string }) {
         <p className="mt-1 whitespace-pre-wrap text-s leading-relaxed">{content}</p>
       </div>
     </div>
-  )
-}
-
-function TargetChip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
-        active
-          ? "border-foreground bg-foreground text-background"
-          : "bg-background text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
   )
 }
 

@@ -12,6 +12,8 @@ from mars.llm.providers.base import (
     TokenUsage,
 )
 from mars.models.debate import (
+    AgentResponse,
+    AgentTurn,
     BaselineAgentResponse,
     BaselineMessage,
     Cycle,
@@ -309,14 +311,17 @@ def test_baseline_chat_persists_user_and_grounded_agent_messages() -> None:
         problem="When does the intervention improve transfer?",
         agent_ids=["1"],
         status="complete",
-        synthesis=Synthesis(
-            meta_review=MetaReview(
-                problem="Transfer remains uncertain.",
-                previous_work="Prior work reports mixed transfer.",
-                reasoning="Distribution shift may moderate the effect.",
-                hypothesis="The intervention may improve in-domain transfer.",
+        turns=[
+            AgentTurn(
+                agent_id="1",
+                phase="refinement",
+                response=AgentResponse(
+                    claim="The intervention may improve in-domain transfer.",
+                    rationale="Distribution shift may moderate the effect.",
+                    message="The intervention should be tested under shift.",
+                ),
             )
-        ),
+        ],
         evidence={
             "1": EvidenceSet(
                 snippets=[
@@ -351,6 +356,7 @@ def test_baseline_chat_persists_user_and_grounded_agent_messages() -> None:
     assert [message.role for message in conversation.messages] == ["user", "agent"]
     assert conversation.messages[1].agent_id == "1"
     assert conversation.messages[1].evidence == ["42"]
+    assert ctx.baseline_conversations["1"] == conversation.messages
     assert ctx.baseline_messages == conversation.messages
 
 

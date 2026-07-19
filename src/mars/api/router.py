@@ -126,10 +126,14 @@ async def run_debate(
 
 @query_router.get("/{query_id}/baseline-chat")
 async def get_baseline_chat(
-    query_id: str, pipeline: Pipeline = Depends(get_pipeline)
+    query_id: str,
+    agent_id: str = Query(..., min_length=1),
+    pipeline: Pipeline = Depends(get_pipeline),
 ) -> BaselineConversation:
     ctx = require_context(query_id, pipeline)
-    return BaselineConversation(messages=ctx.baseline_messages)
+    return BaselineConversation(
+        messages=ctx.baseline_conversations.get(agent_id, [])
+    )
 
 
 @query_router.post("/{query_id}/baseline-chat")
